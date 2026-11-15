@@ -1,0 +1,11 @@
+{
+  "name": "ironwake",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Ironwake — a naval strategy game for iPad. No build step; this file exists only so the tests can run.",
+  "scripts": {
+    "test": "node --test",
+    "stamp": "node tools/stamp.mjs"
+  }
+}

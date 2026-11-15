@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Ironwake</title>
+<meta name="description" content="Ironwake — a naval strategy game. Hunt the enemy fleet on the sonar grid, solo or pass-and-play.">
+
+<meta name="theme-color" content="#04090d" id="theme-color">
+<meta name="color-scheme" content="dark light">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ironwake">
+<meta name="format-detection" content="telephone=no">
+<!--SPLASH-->
+<link rel="apple-touch-startup-image" media="screen and (device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-744x1133-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-744x1133-landscape.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-768x1024-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-768x1024-landscape.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 810px) and (device-height: 1080px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-810x1080-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 810px) and (device-height: 1080px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-810x1080-landscape.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-820x1180-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-820x1180-landscape.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-834x1112-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-834x1112-landscape.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-834x1194-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-834x1194-landscape.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1210px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-834x1210-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1210px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-834x1210-landscape.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-1024x1366-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-1024x1366-landscape.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 1032px) and (device-height: 1376px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash/ipad-1032x1376-portrait.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width: 1032px) and (device-height: 1376px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="splash/ipad-1032x1376-landscape.png">
+<!--/SPLASH-->
+<link rel="stylesheet" href="css/style.css">
+<script>
+  // Apply the saved appearance before first paint so there is no flash.
+  try {
+    var s = JSON.parse(localStorage.getItem('ironwake.settings.v1')) || {};
+    if (s.theme === 'dark' || s.theme === 'light') document.documentElement.dataset.theme = s.theme;
+  } catch (e) {}
+</script>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="app">
+  <!-- Title -->
+  <section id="title" class="screen title">
+    <div class="scope" aria-hidden="true">
+      <i class="ring r1"></i><i class="ring r2"></i><i class="ring r3"></i><i class="axis"></i>
+      <i class="sweep"></i><i class="blip b1"></i><i class="blip b2"></i><i class="blip b3"></i>
+    </div>
+    <div class="title-card">
+      <div class="emblem" data-emblem></div>
+      <h1 class="wordmark">Ironwake</h1>
+      <p class="tagline">Find the fleet · Sink the fleet</p>
+      <nav class="menu" aria-label="Main menu">
+        <button class="btn primary stack" id="btn-resume" hidden>Resume battle<small id="resume-detail"></small></button>
+        <button class="btn primary stack" id="btn-solo">Solo mission<small>Take on the computer</small></button>
+        <button class="btn stack" id="btn-duo">Pass &amp; play<small id="duo-detail">Two players, one screen</small></button>
+        <div class="menu-row">
+          <button class="btn" id="btn-stats"><span data-icon="chart"></span>Record</button>
+          <button class="btn" id="btn-help"><span data-icon="help"></span>How to play</button>
+          <button class="btn" id="btn-settings"><span data-icon="gear"></span>Settings</button>
+        </div>
+      </nav>
+    </div>
+    <p class="foot" id="foot"></p>
+  </section>
+
+  <!-- Fleet placement -->
+  <section id="place" class="screen" hidden>
+    <header class="hud">
+      <button class="icon-btn" id="place-back" aria-label="Back to menu" data-icon="back"></button>
+      <div class="hud-title">
+        <span class="eyebrow" id="place-eyebrow"></span>
+        <strong id="place-title">Deploy your fleet</strong>
+      </div>
+    </header>
+    <div class="stage"><div class="stage-in">
+      <div class="board placing" id="place-board"></div>
+      <aside class="side place-side">
+        <div class="panel tray-panel">
+          <h2>Your fleet <em id="tray-count">0 / 5</em></h2>
+          <div class="tray" id="tray"></div>
+          <p class="hint">Drag to place · tap to rotate · drag off the grid to remove</p>
+        </div>
+        <div class="place-actions">
+          <button class="btn" id="btn-auto"><span data-icon="shuffle"></span>Auto-place</button>
+          <button class="btn" id="btn-clear"><span data-icon="clear"></span>Clear</button>
+          <button class="btn primary" id="btn-deploy" disabled>Deploy fleet</button>
+        </div>
+      </aside>
+    </div></div>
+  </section>
+
+  <!-- Battle -->
+  <section id="battle" class="screen" hidden>
+    <header class="hud">
+      <button class="icon-btn" id="battle-menu" aria-label="Pause menu" data-icon="pause"></button>
+      <button class="turn" id="turn" aria-live="polite">
+        <span class="turn-dot"></span>
+        <span><strong id="turn-main"></strong><span id="turn-sub"></span></span>
+      </button>
+      <div class="readout">
+        <span><b id="ro-shots">0</b>shots</span>
+        <span><b id="ro-acc">–</b>accuracy</span>
+        <span class="clock" id="ro-time" aria-label="Elapsed time">0:00</span>
+      </div>
+    </header>
+    <div class="stage"><div class="stage-in">
+      <div class="board" id="target-board" aria-label="Enemy waters"></div>
+      <aside class="side">
+        <div class="panel own-panel">
+          <h2><span id="own-title">Your fleet</span> <em id="own-count"></em></h2>
+          <div class="mini-wrap"><div class="board mini" id="own-board" aria-label="Your fleet"></div></div>
+        </div>
+        <div class="panel fleet-panel">
+          <h2><span id="enemy-title">Enemy fleet</span> <em id="enemy-count"></em></h2>
+          <div class="fleet-list" id="enemy-fleet"></div>
+          <div class="ticker" id="ticker" aria-live="polite"></div>
+        </div>
+      </aside>
+    </div></div>
+  </section>
+</main>
+
+<!-- Pass-and-play handover: fully opaque so nothing shows through -->
+<div class="overlay" id="cover" hidden>
+  <div class="cover-card" id="cover-card">
+    <div class="emblem" data-emblem></div>
+    <span class="eyebrow" id="cover-eyebrow">Pass the device to</span>
+    <div class="big who" id="cover-who">Player 2</div>
+    <p id="cover-text"></p>
+    <div class="last-shot" id="cover-last" hidden></div>
+    <button class="btn primary" id="cover-ready" disabled>Ready</button>
+  </div>
+</div>
+
+<!-- Win / lose -->
+<div class="overlay scrim" id="result" hidden>
+  <div class="card result-card" id="result-card" role="dialog" aria-modal="true" aria-labelledby="verdict">
+    <div class="card-body scroll">
+      <div class="verdict" id="verdict"></div>
+      <p class="sub" id="result-sub"></p>
+      <div id="result-badges"></div>
+      <div id="result-stats"></div>
+      <div class="card-actions">
+        <button class="btn primary" id="btn-rematch">Rematch</button>
+        <div class="card-actions two" style="margin-top:0">
+          <button class="btn" id="btn-review">View boards</button>
+          <button class="btn" id="btn-result-menu">Main menu</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Generic sheet: settings, record, help, mission setup, pause -->
+<div class="overlay scrim" id="sheet" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="card-head">
+      <h2 id="sheet-title"></h2>
+      <button class="icon-btn" id="sheet-close" aria-label="Close" data-icon="close"></button>
+    </div>
+    <div class="card-body scroll" id="sheet-body"></div>
+  </div>
+</div>
+
+<div class="overlay scrim" id="confirm" hidden style="z-index:65">
+  <div class="card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" style="width:min(420px,100%)">
+    <div class="card-body">
+      <h2 class="display" id="confirm-title" style="font-size:26px;letter-spacing:.12em"></h2>
+      <p id="confirm-text" style="margin-top:6px"></p>
+      <div class="card-actions two">
+        <button class="btn" id="confirm-no">Cancel</button>
+        <button class="btn primary" id="confirm-yes">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="callout" id="callout" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<label class="hx" for="hx-switch" id="hx-label" aria-hidden="true"><input type="checkbox" switch id="hx-switch" tabindex="-1"></label>
+
+<noscript><p style="padding:2rem;color:#dff5f0">Ironwake needs JavaScript to run.</p></noscript>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
