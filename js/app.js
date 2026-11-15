@@ -273,17 +273,17 @@ async function requestNewGame(mode) {
     });
     if (!ok) return;
   }
-  if (mode === 'solo') openSetup(); else startGame('duo', settings.difficulty);
+  openSetup(mode);
 }
 
-function startGame(mode, difficulty) {
+function startGame(mode, difficulty, hitAndGoAgain) {
   bumpGen();
   covered = false;
   log = [];
   $('result').hidden = true;
   $('cover').hidden = true;
   closeSheet();
-  game = newGame({ mode, difficulty });
+  game = newGame({ mode, difficulty, hitAndGoAgain });
   persist();
   enterPlacement();
 }
@@ -581,11 +581,13 @@ function beginTurn() {
   viewer = game.mode === 'solo' ? 0 : game.turn;
   underFire = false;
   paintBattle();
+  const extraShot = game.hitAndGoAgain && game.last?.by === viewer;
+  const prompt = extraShot ? 'Fire again' : 'Choose a square to fire on';
   if (game.mode === 'solo') {
-    if (game.turn === 0) setTurn('you', 'Your turn', 'Choose a square to fire on');
+    if (game.turn === 0) setTurn('you', 'Your turn', prompt);
     else aiTurn();
   } else {
-    setTurn(viewer === 0 ? 'you' : 'p2', `Player ${viewer + 1}`, 'Choose a square to fire on');
+    setTurn(viewer === 0 ? 'you' : 'p2', `Player ${viewer + 1}`, prompt);
   }
 }
 
@@ -671,7 +673,7 @@ async function resolveShot(i) {
   if (myGen !== gen) return;
   busy = false;
   if (game.phase === 'over') return showResult();
-  if (game.mode === 'duo') return showCover();
+  if (game.cover) return showCover();
   beginTurn();
 }
 
@@ -773,7 +775,7 @@ async function showResult() {
   else { sfx.play('win'); haptic('win'); fx.fireworks(); }
 }
 
-$('btn-rematch').addEventListener('click', () => { sfx.play('click'); startGame(game.mode, game.difficulty); });
+$('btn-rematch').addEventListener('click', () => { sfx.play('click'); startGame(game.mode, game.difficulty, game.hitAndGoAgain); });
 $('btn-review').addEventListener('click', () => { sfx.play('click'); $('result').hidden = true; });
 $('btn-result-menu').addEventListener('click', () => { sfx.play('click'); quitToMenu(); });
 $('turn').addEventListener('click', () => {
@@ -827,8 +829,12 @@ function levelCards(selected) {
     </button>`).join('')}</div>`;
 }
 
-function openSetup() {
-  const body = openSheet('Solo mission', `${levelCards(settings.difficulty)}
+function openSetup(mode) {
+  const solo = mode === 'solo';
+  const body = openSheet(solo ? 'Solo mission' : 'Pass & play', `
+    ${solo ? levelCards(settings.difficulty) : ''}
+    <div class="row"><div class="lbl"><b>Hit and go again</b><span>Hit or sink a ship to fire again. A miss ends your turn.</span></div>
+    <button type="button" id="hit-and-go-again" class="switch" role="switch" aria-checked="false" aria-label="Hit and go again"></button></div>
     <div class="card-actions"><button class="btn primary" id="setup-go">Deploy fleet</button></div>`);
   body.querySelectorAll('.level').forEach((b) => b.addEventListener('click', () => {
     settings.difficulty = b.dataset.level;
@@ -836,7 +842,16 @@ function openSetup() {
     sfx.play('toggle');
     body.querySelectorAll('.level').forEach((x) => x.setAttribute('aria-pressed', x === b));
   }));
-  body.querySelector('#setup-go').addEventListener('click', () => { sfx.play('click'); startGame('solo', settings.difficulty); });
+  const bonus = body.querySelector('#hit-and-go-again');
+  const bonusEnabled = () => bonus.getAttribute('aria-checked') === 'true';
+  bonus.addEventListener('click', () => {
+    bonus.setAttribute('aria-checked', !bonusEnabled());
+    sfx.play('toggle');
+  });
+  body.querySelector('#setup-go').addEventListener('click', () => {
+    sfx.play('click');
+    startGame(mode, settings.difficulty, bonusEnabled());
+  });
 }
 
 function openSettings() {
@@ -904,7 +919,7 @@ function openHelp() {
     <h3>Deploy</h3>
     <p>Each side hides five ships on a 10 × 10 grid: Carrier (5), Dreadnought (4), Cruiser (3), Submarine (3) and Corvette (2). Drag a ship on to the grid, tap it to rotate, or let Auto-place do it. Ships may touch but cannot overlap.</p>
     <h3>Engage</h3>
-    <p>Take turns firing one shot at the enemy grid. Tap any square you haven't tried.</p>
+    <p>Tap any square you haven't tried. In classic play, you take one shot per turn. With Hit and go again enabled, a hit or sinking earns another shot and a miss passes the turn.</p>
     <div class="legend">
       ${sw('miss')}<span><b>Miss</b> — open water.</span>
       ${sw('hit')}<span><b>Hit</b> — part of a ship is burning. Keep firing nearby.</span>
@@ -913,7 +928,7 @@ function openHelp() {
     <h3>Win</h3>
     <p>Sink all five enemy ships before yours go down. The fleet panel shows what's still afloat.</p>
     <h3>Pass &amp; play</h3>
-    <p>Two players share one ${DEVICE}. After every shot a handover screen hides both fleets until the next player says they're ready.</p>
+    <p>Two players share one ${DEVICE}. When the turn passes, a handover screen hides both fleets until the next player says they're ready.</p>
     <h3>Opponents</h3>
     <p><b>Easy</b> fires at random. <b>Normal</b> hunts, then follows up its hits. <b>Hard</b> works out the odds of a ship on every square from the ships still afloat.</p>
   </div>`);

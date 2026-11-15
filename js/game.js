@@ -9,12 +9,13 @@ import { LEVELS } from './ai.js';
 
 export const SAVE_VERSION = 1;
 
-export function newGame({ mode = 'solo', difficulty = 'normal' } = {}) {
+export function newGame({ mode = 'solo', difficulty = 'normal', hitAndGoAgain = false } = {}) {
   return {
     v: SAVE_VERSION,
     id: Math.random().toString(36).slice(2, 10),
     mode: mode === 'duo' ? 'duo' : 'solo',
     difficulty: LEVELS.includes(difficulty) ? difficulty : 'normal',
+    hitAndGoAgain: hitAndGoAgain === true,
     phase: 'placement', // placement → battle → over
     placing: 0,
     turn: 0,
@@ -63,7 +64,7 @@ export function takeShot(game, i) {
     game.phase = 'over';
     game.winner = by;
     game.cover = false;
-  } else {
+  } else if (!game.hitAndGoAgain || res.result === 'miss') {
     game.turn = 1 - by;
     if (game.mode === 'duo') game.cover = true;
   }
@@ -127,6 +128,8 @@ export function reviveGame(raw) {
         }
       }
     }
+    if (g.hitAndGoAgain !== undefined && typeof g.hitAndGoAgain !== 'boolean') return null;
+    g.hitAndGoAgain ??= false;
     if (!validShips(g.draft || [], false)) return null;
     if (g.phase === 'over' && ![0, 1].includes(g.winner)) return null;
     if (g.phase !== 'over') g.winner = null;

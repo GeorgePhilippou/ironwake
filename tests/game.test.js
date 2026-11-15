@@ -36,6 +36,41 @@ test('turns alternate after every legal shot, hit or miss', () => {
   assert.equal(g.turn, 0);
 });
 
+test('hit and go again: hits and sinkings retain the turn, while a miss triggers handover', () => {
+  const g = newGame({ mode: 'duo', hitAndGoAgain: true });
+  commitFleet(g, 0, fleet(3));
+  commitFleet(g, 1, fleet(4));
+  g.cover = false;
+
+  const target = g.boards[1];
+  const occupied = target.ships.flatMap(shipCells);
+  const [first, last] = shipCells(target.ships.find((ship) => ship.len === 2));
+  assert.equal(takeShot(g, first).result, 'hit');
+  assert.equal(g.turn, 0);
+  assert.equal(g.cover, false);
+
+  const resumed = reviveGame(JSON.stringify(g));
+  assert.equal(resumed.hitAndGoAgain, true);
+  assert.equal(takeShot(resumed, last).result, 'sunk');
+  assert.equal(resumed.turn, 0);
+  assert.equal(resumed.cover, false);
+
+  const water = [...Array(CELLS).keys()].find((i) => !occupied.includes(i));
+  assert.equal(takeShot(resumed, water).result, 'miss');
+  assert.equal(resumed.turn, 1);
+  assert.equal(resumed.cover, true);
+});
+
+test('saves created before hit and go again resume with classic rules', () => {
+  const legacy = soloInBattle();
+  delete legacy.hitAndGoAgain;
+  const g = reviveGame(JSON.stringify(legacy));
+  assert.equal(g.hitAndGoAgain, false);
+  const cell = shipCells(g.boards[1].ships[0])[0];
+  assert.equal(takeShot(g, cell).result, 'hit');
+  assert.equal(g.turn, 1);
+});
+
 test('an illegal shot does not use up the turn', () => {
   const g = soloInBattle();
   takeShot(g, 5); // player
