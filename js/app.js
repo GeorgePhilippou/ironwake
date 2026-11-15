@@ -57,8 +57,8 @@ const mqLight = window.matchMedia('(prefers-color-scheme: light)');
 const reduced = () => (settings.reducedMotion === null ? mqMotion.matches : settings.reducedMotion);
 const isLight = () => (settings.theme === 'auto' ? mqLight.matches : settings.theme === 'light');
 const timing = () => (reduced()
-  ? { shell: 120, hold: 560, sunkHold: 1000, think: 380, result: 500 }
-  : { shell: 540, hold: 760, sunkHold: 1650, think: 720, result: 900 });
+  ? { aim: 120, hold: 560, sunkHold: 1000, think: 380, result: 500 }
+  : { aim: 280, hold: 760, sunkHold: 1650, think: 720, result: 900 });
 
 function applySettings() {
   const root = document.documentElement;
@@ -160,6 +160,34 @@ function makeBoard(host, { buttons = false, onCell = null } = {}) {
     cells.push(el);
   }
   if (onCell) {
+    // iPad Safari can suppress the synthesized click after slight finger movement.
+    // Keep the square where the finger landed and cancel gestures that move farther.
+    let tap = null;
+    const tapSlop = 12;
+    const movedTooFar = (touch) => Math.hypot(touch.clientX - tap.x, touch.clientY - tap.y) > tapSlop;
+
+    cellsEl.addEventListener('touchstart', (e) => {
+      tap = null;
+      const cell = e.target.closest('.cell');
+      if (!cell || e.touches.length !== 1 || !canFire()) return;
+      const touch = e.changedTouches[0];
+      tap = { cell, id: touch.identifier, x: touch.clientX, y: touch.clientY };
+    }, { passive: true });
+    cellsEl.addEventListener('touchmove', (e) => {
+      if (!tap) return;
+      const touch = Array.from(e.touches).find((t) => t.identifier === tap.id);
+      if (e.touches.length !== 1 || !touch || movedTooFar(touch)) tap = null;
+    }, { passive: true });
+    cellsEl.addEventListener('touchcancel', () => { tap = null; });
+    cellsEl.addEventListener('touchend', (e) => {
+      // Handle touch here and suppress its synthetic click. Mouse and keyboard use click below.
+      if (!e.cancelable) { tap = null; return; }
+      e.preventDefault();
+      const touch = tap && Array.from(e.changedTouches).find((t) => t.identifier === tap.id);
+      const cell = touch && e.touches.length === 0 && !movedTooFar(touch) ? tap.cell : null;
+      tap = null;
+      if (cell) onCell(Number(cell.dataset.i), cell);
+    }, { passive: false });
     cellsEl.addEventListener('click', (e) => {
       const c = e.target.closest('.cell');
       if (c) onCell(Number(c.dataset.i), c);
@@ -208,10 +236,6 @@ function makeBoard(host, { buttons = false, onCell = null } = {}) {
       return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     },
     cellSize() { return grid.getBoundingClientRect().width / 10; },
-    center() {
-      const r = grid.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    },
   };
 }
 
@@ -606,16 +630,16 @@ async function resolveShot(i) {
   const t = timing();
   const incoming = res.by !== viewer;
   const ui = incoming ? ownBoard : targetBoard;
-  const to = ui.cellCenter(i);
-  const from = (incoming ? targetBoard : ownBoard).center();
+  const aim = ui.cellCenter(i);
   sfx.play('fire');
-  haptic('tap');
-  fx.shell(from, to, t.shell / SPEED);
-  await wait(t.shell);
+  if (!incoming) haptic('tap');
+  fx.aim(aim.x, aim.y, ui.cellSize(), t.aim / SPEED);
+  await wait(t.aim);
   if (myGen !== gen) return;
 
   const freshOn = incoming ? 'own' : 'target';
   paintBattle({ fresh: i, freshShip: res.result === 'sunk' ? res.ship.id : null, freshOn });
+  const to = ui.cellCenter(i);
   const scale = clamp(ui.cellSize() / 58, 0.45, 1.25);
   if (res.result === 'miss') {
     fx.splash(to.x, to.y, scale);
@@ -632,12 +656,13 @@ async function resolveShot(i) {
     sfx.play('sunk');
     haptic('sunk');
     shake(ui.host, true);
-    shipCells(res.ship).forEach((c, n) => {
+    fx.explosion(to.x, to.y, scale * 1.1);
+    shipCells(res.ship).filter((c) => c !== i).forEach((c, n) => {
       setTimeout(() => {
         if (myGen !== gen) return;
         const p = ui.cellCenter(c);
         fx.explosion(p.x, p.y, scale * 1.1);
-      }, (n * 110) / SPEED);
+      }, ((n + 1) * 110) / SPEED);
     });
     callout(incoming ? `${shipName(res.ship.id)} lost` : `${shipName(res.ship.id)} sunk`, 'sunk', ui.grid, 1500, incoming);
   }
@@ -822,7 +847,7 @@ function openSettings() {
   const body = openSheet('Settings', `
     ${sw('sound', settings.sound, 'Sound effects', 'Guns, splashes and sonar')}
     ${sw('haptics', settings.haptics, 'Haptics', 'Vibration feedback, where the device supports it')}
-    ${sw('reducedMotion', reduced(), 'Reduce motion', 'Skip shell trails, shake and particles')}
+    ${sw('reducedMotion', reduced(), 'Reduce motion', 'Skip targeting pulses, shake and particles')}
     <div class="row col"><div class="lbl"><b>Difficulty</b><span>For your next solo mission</span></div>
       ${seg('difficulty', settings.difficulty, LEVELS.map((l) => [l, LEVEL_INFO[l].name]))}</div>
     <div class="row col"><div class="lbl"><b>Appearance</b><span>Night watch, day chart, or follow the ${DEVICE}</span></div>

@@ -1,4 +1,4 @@
-// Ironwake — transient battle effects on one full-screen canvas: shell trails,
+// Ironwake — transient battle effects on one full-screen canvas: targeting pulses,
 // splashes, explosions, fireworks. The loop only runs while something is alive,
 // and game logic never waits on it (timing lives in app.js), so a throttled or
 // hidden tab cannot stall a match.
@@ -11,7 +11,6 @@ export class Fx {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.parts = [];
-    this.shells = [];
     this.rings = [];
     this.running = false;
     this.reduced = false;
@@ -32,7 +31,6 @@ export class Fx {
 
   clear() {
     this.parts.length = 0;
-    this.shells.length = 0;
     this.rings.length = 0;
     this.ctx.clearRect(0, 0, this.w, this.h);
   }
@@ -44,21 +42,12 @@ export class Fx {
     requestAnimationFrame((t) => this.frame(t));
   }
 
-  /** A shell arcing from → to over `dur` ms. Visual only. */
-  shell(from, to, dur) {
+  aim(x, y, size, dur) {
     if (this.reduced) return;
-    const dist = Math.hypot(to.x - from.x, to.y - from.y);
-    this.shells.push({
-      from, to, dur, t: 0,
-      cx: (from.x + to.x) / 2,
-      cy: Math.min(from.y, to.y) - Math.max(60, dist * 0.35),
+    this.rings.push({
+      x, y, r0: size * 0.64, r1: size * 0.2, life: 0, max: dur / 1000,
+      color: this.light ? '#a6451a' : '#ffbf63', width: 2,
     });
-    // muzzle flash
-    for (let i = 0; i < 10; i++) {
-      const a = rand(0, TAU);
-      const v = rand(40, 190);
-      this.parts.push({ x: from.x, y: from.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, max: rand(0.15, 0.35), size: rand(2, 5), color: '#ffd98a', g: 0, drag: 4, kind: 'spark' });
-    }
     this.kick();
   }
 
@@ -115,25 +104,6 @@ export class Fx {
     c.clearRect(0, 0, this.w, this.h);
     c.globalCompositeOperation = this.light ? 'source-over' : 'lighter';
 
-    // shells
-    for (const s of this.shells) {
-      s.t += (dt * 1000) / s.dur;
-      const head = Math.min(1, s.t);
-      const steps = 14;
-      for (let i = 0; i <= steps; i++) {
-        const u = head - (i / steps) * 0.3;
-        if (u < 0) break;
-        const p = bez(s, u);
-        const k = 1 - i / steps;
-        c.globalAlpha = k * 0.9;
-        c.fillStyle = i === 0 ? '#fff6d8' : this.light ? '#c9541c' : '#ffb347';
-        c.beginPath();
-        c.arc(p.x, p.y, 1.2 + k * 3.6, 0, TAU);
-        c.fill();
-      }
-    }
-    this.shells = this.shells.filter((s) => s.t < 1);
-
     // rings
     for (const r of this.rings) {
       r.life += dt;
@@ -186,19 +156,11 @@ export class Fx {
     this.parts = this.parts.filter((p) => p.life < p.max);
     c.globalAlpha = 1;
 
-    if (this.parts.length || this.shells.length || this.rings.length) {
+    if (this.parts.length || this.rings.length) {
       requestAnimationFrame((t) => this.frame(t));
     } else {
       this.running = false;
       c.clearRect(0, 0, this.w, this.h);
     }
   }
-}
-
-function bez(s, u) {
-  const v = 1 - u;
-  return {
-    x: v * v * s.from.x + 2 * v * u * s.cx + u * u * s.to.x,
-    y: v * v * s.from.y + 2 * v * u * s.cy + u * u * s.to.y,
-  };
 }
