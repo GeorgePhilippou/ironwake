@@ -31,6 +31,31 @@ test('placement: legal positions are accepted, including touching ships', () => 
   assert.ok(validatePlacement(touching, touching[1]).ok);
 });
 
+test('spacing rejects shared edges and corners while allowing a clear square', () => {
+  const placed = [ship('carrier', 2, 1, true)];
+  for (const cand of [ship('corvette', 3, 2, true), ship('corvette', 3, 6, false)]) {
+    assert.ok(validatePlacement(placed, cand).ok);
+    assert.deepEqual(validatePlacement(placed, cand, true),
+      { ok: false, reason: 'touching', with: 'carrier' });
+  }
+  assert.ok(validatePlacement(placed, ship('corvette', 4, 2, true), true).ok);
+  assert.ok(validatePlacement([ship('corvette', 0, 8, true)], ship('carrier', 1, 0, true), true).ok);
+});
+
+test('auto-place, individual placement and rotation respect spacing', () => {
+  for (let seed = 0; seed < 30; seed++) {
+    const ships = randomFleet(mulberry32(seed), true);
+    assert.ok(isFleetComplete(ships, true));
+  }
+  const carrier = ship('carrier', 2, 1, true);
+  const corvette = ship('corvette', 0, 6, true);
+  const spot = randomSpot([carrier], FLEET.find((s) => s.id === corvette.id), mulberry32(5), true);
+  assert.ok(spot && validatePlacement([carrier], spot, true).ok);
+  const rotated = rotatedPlacement([carrier, corvette], corvette, true);
+  assert.ok(rotated && validatePlacement([carrier], rotated, true).ok);
+  assert.notDeepEqual(rotated, { ...corvette, horiz: false });
+});
+
 test('placement: every edge rejects a ship that runs off the grid', () => {
   const off = [
     ship('carrier', 0, 6, true), // off the right

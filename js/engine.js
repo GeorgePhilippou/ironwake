@@ -23,12 +23,12 @@ export const cellName = (i) => 'ABCDEFGHIJ'[rowOf(i)] + (colOf(i) + 1);
 export const shipName = (id) => (FLEET.find((s) => s.id === id) || { name: id }).name;
 
 const isInt = Number.isInteger;
+const endRow = (ship) => ship.r + (ship.horiz ? 0 : ship.len - 1);
+const endCol = (ship) => ship.c + (ship.horiz ? ship.len - 1 : 0);
 
 export function inBounds(ship) {
   if (!ship || !isInt(ship.r) || !isInt(ship.c) || !isInt(ship.len) || ship.len < 1) return false;
-  const endR = ship.r + (ship.horiz ? 0 : ship.len - 1);
-  const endC = ship.c + (ship.horiz ? ship.len - 1 : 0);
-  return ship.r >= 0 && ship.c >= 0 && endR < SIZE && endC < SIZE;
+  return ship.r >= 0 && ship.c >= 0 && endRow(ship) < SIZE && endCol(ship) < SIZE;
 }
 
 /** Cell indexes a ship covers. Only meaningful for in-bounds ships. */
@@ -43,31 +43,32 @@ export function shipCells(ship) {
 /**
  * Can `cand` sit on the grid alongside `ships`? A ship with the same id as the
  * candidate is ignored, so moving a ship never collides with its old position.
- * Ships may touch (classic rules); they may not overlap or leave the grid.
+ * With spacing enabled, ships also need a gap along edges and at corners.
  */
-export function validatePlacement(ships, cand) {
+export function validatePlacement(ships, cand, keepShipsApart = false) {
   if (!inBounds(cand)) return { ok: false, reason: 'bounds' };
-  const mine = new Set(shipCells(cand));
+  let touching = null;
   for (const other of ships) {
     if (other.id === cand.id) continue;
-    for (const cell of shipCells(other)) {
-      if (mine.has(cell)) return { ok: false, reason: 'overlap', with: other.id };
-    }
+    const rowGap = Math.max(cand.r - endRow(other), other.r - endRow(cand));
+    const colGap = Math.max(cand.c - endCol(other), other.c - endCol(cand));
+    if (rowGap <= 0 && colGap <= 0) return { ok: false, reason: 'overlap', with: other.id };
+    if (keepShipsApart && rowGap <= 1 && colGap <= 1) touching ??= other;
   }
-  return { ok: true };
+  return touching ? { ok: false, reason: 'touching', with: touching.id } : { ok: true };
 }
 
 /** True when `ships` is exactly the standard fleet, legally placed. */
-export function isFleetComplete(ships) {
+export function isFleetComplete(ships, keepShipsApart = false) {
   if (!Array.isArray(ships) || ships.length !== FLEET.length) return false;
   for (const spec of FLEET) {
     const matches = ships.filter((s) => s && s.id === spec.id);
     if (matches.length !== 1 || matches[0].len !== spec.len) return false;
   }
-  return ships.every((s) => validatePlacement(ships, s).ok);
+  return ships.every((s) => validatePlacement(ships, s, keepShipsApart).ok);
 }
 
-export function randomFleet(rng = Math.random) {
+export function randomFleet(rng = Math.random, keepShipsApart = false) {
   for (;;) {
     const ships = [];
     let stuck = false;
@@ -78,7 +79,7 @@ export function randomFleet(rng = Math.random) {
         const r = Math.floor(rng() * (horiz ? SIZE : SIZE - spec.len + 1));
         const c = Math.floor(rng() * (horiz ? SIZE - spec.len + 1 : SIZE));
         const cand = { id: spec.id, len: spec.len, r, c, horiz };
-        if (validatePlacement(ships, cand).ok) {
+        if (validatePlacement(ships, cand, keepShipsApart).ok) {
           ships.push(cand);
           placed = true;
         }
@@ -90,13 +91,13 @@ export function randomFleet(rng = Math.random) {
 }
 
 /** A random legal spot for one ship among already-placed `ships`, or null. */
-export function randomSpot(ships, spec, rng = Math.random) {
+export function randomSpot(ships, spec, rng = Math.random, keepShipsApart = false) {
   const options = [];
   for (const horiz of [true, false]) {
     for (let r = 0; r < SIZE; r++) {
       for (let c = 0; c < SIZE; c++) {
         const cand = { id: spec.id, len: spec.len, r, c, horiz };
-        if (validatePlacement(ships, cand).ok) options.push(cand);
+        if (validatePlacement(ships, cand, keepShipsApart).ok) options.push(cand);
       }
     }
   }
@@ -109,7 +110,7 @@ export function randomSpot(ships, spec, rng = Math.random) {
  * the edge still rotates). Returns the new placement, or null if nothing fits
  * within one ship-length of where it was.
  */
-export function rotatedPlacement(ships, ship) {
+export function rotatedPlacement(ships, ship, keepShipsApart = false) {
   const horiz = !ship.horiz;
   const tries = [];
   for (let along = -(ship.len - 1); along <= ship.len - 1; along++) {
@@ -126,7 +127,7 @@ export function rotatedPlacement(ships, ship) {
       r: ship.r + (horiz ? t.across : t.along),
       c: ship.c + (horiz ? t.along : t.across),
     };
-    if (validatePlacement(ships, cand).ok) return cand;
+    if (validatePlacement(ships, cand, keepShipsApart).ok) return cand;
   }
   return null;
 }

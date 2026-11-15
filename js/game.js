@@ -3,19 +3,20 @@
 
 import {
   CELLS, FLEET, UNKNOWN, MISS, HIT,
-  createBoard, isFleetComplete, randomFleet, fire, countShots, isSunk, inBounds,
+  createBoard, isFleetComplete, randomFleet, fire, countShots, isSunk, inBounds, validatePlacement,
 } from './engine.js';
 import { LEVELS } from './ai.js';
 
 export const SAVE_VERSION = 1;
 
-export function newGame({ mode = 'solo', difficulty = 'normal', hitAndGoAgain = false } = {}) {
+export function newGame({ mode = 'solo', difficulty = 'normal', hitAndGoAgain = false, keepShipsApart = false } = {}) {
   return {
     v: SAVE_VERSION,
     id: Math.random().toString(36).slice(2, 10),
     mode: mode === 'duo' ? 'duo' : 'solo',
     difficulty: LEVELS.includes(difficulty) ? difficulty : 'normal',
     hitAndGoAgain: hitAndGoAgain === true,
+    keepShipsApart: keepShipsApart === true,
     phase: 'placement', // placement → battle → over
     placing: 0,
     turn: 0,
@@ -35,11 +36,11 @@ export function newGame({ mode = 'solo', difficulty = 'normal', hitAndGoAgain = 
  */
 export function commitFleet(game, p, ships, rng = Math.random) {
   if (game.phase !== 'placement' || p !== game.placing) return { ok: false, reason: 'phase' };
-  if (!isFleetComplete(ships)) return { ok: false, reason: 'incomplete' };
+  if (!isFleetComplete(ships, game.keepShipsApart)) return { ok: false, reason: 'incomplete' };
   game.boards[p] = createBoard(ships);
   game.draft = [];
   if (game.mode === 'solo') {
-    game.boards[1] = createBoard(randomFleet(rng));
+    game.boards[1] = createBoard(randomFleet(rng, game.keepShipsApart));
     game.phase = 'battle';
     game.turn = 0;
   } else if (p === 0) {
@@ -84,16 +85,16 @@ export function playerStats(game, p) {
   };
 }
 
-function validShips(ships, mustBeComplete) {
+function validShips(ships, mustBeComplete, keepShipsApart) {
   if (!Array.isArray(ships)) return false;
-  if (mustBeComplete) return isFleetComplete(ships);
+  if (mustBeComplete) return isFleetComplete(ships, keepShipsApart);
   const seen = new Set();
   for (const s of ships) {
     const spec = s && FLEET.find((f) => f.id === s.id);
     if (!spec || spec.len !== s.len || seen.has(s.id) || !inBounds(s)) return false;
     seen.add(s.id);
   }
-  return true;
+  return ships.every((ship) => validatePlacement(ships, ship, keepShipsApart).ok);
 }
 
 /**
@@ -108,13 +109,17 @@ export function reviveGame(raw) {
     if (!['placement', 'battle', 'over'].includes(g.phase)) return null;
     if (![0, 1].includes(g.turn) || ![0, 1].includes(g.placing)) return null;
     if (!Array.isArray(g.boards) || g.boards.length !== 2) return null;
+    for (const rule of ['hitAndGoAgain', 'keepShipsApart']) {
+      if (g[rule] !== undefined && typeof g[rule] !== 'boolean') return null;
+      g[rule] ??= false;
+    }
     const battle = g.phase !== 'placement';
     for (let p = 0; p < 2; p++) {
       const b = g.boards[p];
       if (!b || !Array.isArray(b.shots) || b.shots.length !== CELLS) return null;
       if (!b.shots.every((s) => s === UNKNOWN || s === MISS || s === HIT)) return null;
       const needFleet = battle || (g.mode === 'duo' && g.placing === 1 && p === 0);
-      if (!validShips(b.ships, needFleet)) return null;
+      if (!validShips(b.ships, needFleet, g.keepShipsApart)) return null;
       if (!battle && b.shots.some((s) => s !== UNKNOWN)) return null;
       // Every recorded result must agree with where the ships actually are.
       if (battle) {
@@ -128,9 +133,7 @@ export function reviveGame(raw) {
         }
       }
     }
-    if (g.hitAndGoAgain !== undefined && typeof g.hitAndGoAgain !== 'boolean') return null;
-    g.hitAndGoAgain ??= false;
-    if (!validShips(g.draft || [], false)) return null;
+    if (!validShips(g.draft || [], false, g.keepShipsApart)) return null;
     if (g.phase === 'over' && ![0, 1].includes(g.winner)) return null;
     if (g.phase !== 'over') g.winner = null;
     g.draft = g.draft || [];

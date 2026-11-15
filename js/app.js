@@ -276,14 +276,14 @@ async function requestNewGame(mode) {
   openSetup(mode);
 }
 
-function startGame(mode, difficulty, hitAndGoAgain) {
+function startGame(options) {
   bumpGen();
   covered = false;
   log = [];
   $('result').hidden = true;
   $('cover').hidden = true;
   closeSheet();
-  game = newGame({ mode, difficulty, hitAndGoAgain });
+  game = newGame(options);
   persist();
   enterPlacement();
 }
@@ -315,6 +315,9 @@ function enterPlacement() {
   const duo = game.mode === 'duo';
   $('place-eyebrow').textContent = duo ? `Pass & play · Player ${game.placing + 1}` : `Solo mission · ${LEVEL_INFO[game.difficulty].name}`;
   $('place-title').textContent = 'Deploy your fleet';
+  $('place-hint').textContent = game.keepShipsApart
+    ? 'Leave a one-square gap between ships, including at corners. Tap to rotate.'
+    : 'Drag to place · tap to rotate · drag off the grid to remove';
   renderPlacement();
   if (duo && game.cover) showCover();
 }
@@ -328,7 +331,7 @@ function renderPlacement(pop = null) {
       <span class="ship">${shipSVG(spec.id)}</span><span class="nm">${spec.name}</span><span class="ln">${placed ? 'ON GRID' : `${spec.len} CELLS`}</span></button>`;
   }).join('');
   $('tray-count').textContent = `${ships.length} / ${FLEET.length}`;
-  $('btn-deploy').disabled = !isFleetComplete(ships);
+  $('btn-deploy').disabled = !isFleetComplete(ships, game.keepShipsApart);
   $('btn-clear').disabled = ships.length === 0;
 }
 
@@ -386,7 +389,7 @@ function dragMove(e) {
     const c = clamp(Math.floor(px / cell) - (d.horiz ? d.grab : 0), 0, 10 - (d.horiz ? d.len : 1));
     const r = clamp(Math.floor(py / cell) - (d.horiz ? 0 : d.grab), 0, 10 - (d.horiz ? 1 : d.len));
     d.cand = { id: d.id, len: d.len, r, c, horiz: d.horiz };
-    const ok = validatePlacement(draft(), d.cand).ok;
+    const ok = validatePlacement(draft(), d.cand, game.keepShipsApart).ok;
     pv.hidden = false;
     pv.className = `preview${ok ? '' : ' bad'}`;
     pv.style.cssText = `left:${c * 10}%;top:${r * 10}%;width:${(d.horiz ? d.len : 1) * 10}%;height:${(d.horiz ? 1 : d.len) * 10}%`;
@@ -421,17 +424,19 @@ function dragEnd(e, cancelled = false) {
   } else if (!d.moved) {
     if (d.source === 'board') {
       const ship = draft().find((s) => s.id === d.id);
-      const rot = ship && rotatedPlacement(draft(), ship);
+      const rot = ship && rotatedPlacement(draft(), ship, game.keepShipsApart);
       if (rot) { setDraftShip(rot); pop = d.id; sfx.play('rotate'); haptic('tap'); }
       else refusal = 'No room to rotate that ship here.';
     } else {
-      const spot = randomSpot(draft(), FLEET.find((s) => s.id === d.id));
+      const spot = randomSpot(draft(), FLEET.find((s) => s.id === d.id), Math.random, game.keepShipsApart);
       if (spot) { setDraftShip(spot); pop = d.id; sfx.play('place'); haptic('place'); }
     }
   } else if (d.cand) {
-    const v = validatePlacement(draft(), d.cand);
+    const v = validatePlacement(draft(), d.cand, game.keepShipsApart);
     if (v.ok) { setDraftShip(d.cand); pop = d.id; sfx.play('place'); haptic('place'); }
-    else refusal = v.reason === 'overlap' ? `That overlaps your ${shipName(v.with)}. Ships can touch, but not cross.` : 'That would put the ship off the grid.';
+    else if (v.reason === 'overlap') refusal = `That overlaps your ${shipName(v.with)}.`;
+    else if (v.reason === 'touching') refusal = `Leave a one-square gap around your ${shipName(v.with)}.`;
+    else refusal = 'That would put the ship off the grid.';
   } else if (d.source === 'board') {
     game.draft = draft().filter((s) => s.id !== d.id);
     persist();
@@ -453,7 +458,7 @@ $('tray').addEventListener('pointerdown', (e) => {
 $('tray').addEventListener('click', (e) => {
   const el = e.target.closest('.tray-item');
   if (!el || e.detail !== 0 || draft().some((s) => s.id === el.dataset.id)) return;
-  const spot = randomSpot(draft(), FLEET.find((s) => s.id === el.dataset.id));
+  const spot = randomSpot(draft(), FLEET.find((s) => s.id === el.dataset.id), Math.random, game.keepShipsApart);
   if (spot) { setDraftShip(spot); renderPlacement(spot.id); }
 });
 window.addEventListener('pointermove', dragMove);
@@ -462,7 +467,7 @@ window.addEventListener('pointercancel', (e) => dragEnd(e, true));
 
 $('btn-auto').addEventListener('click', () => {
   if (drag) return;
-  game.draft = randomFleet();
+  game.draft = randomFleet(Math.random, game.keepShipsApart);
   persist();
   sfx.play('place');
   haptic('place');
@@ -775,7 +780,7 @@ async function showResult() {
   else { sfx.play('win'); haptic('win'); fx.fireworks(); }
 }
 
-$('btn-rematch').addEventListener('click', () => { sfx.play('click'); startGame(game.mode, game.difficulty, game.hitAndGoAgain); });
+$('btn-rematch').addEventListener('click', () => { sfx.play('click'); startGame(game); });
 $('btn-review').addEventListener('click', () => { sfx.play('click'); $('result').hidden = true; });
 $('btn-result-menu').addEventListener('click', () => { sfx.play('click'); quitToMenu(); });
 $('turn').addEventListener('click', () => {
@@ -831,10 +836,13 @@ function levelCards(selected) {
 
 function openSetup(mode) {
   const solo = mode === 'solo';
+  const ruleSwitch = (id, title, description) => `<div class="row">
+    <div class="lbl"><b>${title}</b><span>${description}</span></div>
+    <button type="button" id="${id}" class="switch" role="switch" aria-checked="false" aria-label="${title}"></button></div>`;
   const body = openSheet(solo ? 'Solo mission' : 'Pass & play', `
     ${solo ? levelCards(settings.difficulty) : ''}
-    <div class="row"><div class="lbl"><b>Hit and go again</b><span>Hit or sink a ship to fire again. A miss ends your turn.</span></div>
-    <button type="button" id="hit-and-go-again" class="switch" role="switch" aria-checked="false" aria-label="Hit and go again"></button></div>
+    ${ruleSwitch('hit-and-go-again', 'Hit and go again', 'Hit or sink a ship to fire again. A miss ends your turn.')}
+    ${ruleSwitch('keep-ships-apart', 'Keep ships apart', 'Leave a one-square gap between ships, including at corners.')}
     <div class="card-actions"><button class="btn primary" id="setup-go">Deploy fleet</button></div>`);
   body.querySelectorAll('.level').forEach((b) => b.addEventListener('click', () => {
     settings.difficulty = b.dataset.level;
@@ -842,15 +850,19 @@ function openSetup(mode) {
     sfx.play('toggle');
     body.querySelectorAll('.level').forEach((x) => x.setAttribute('aria-pressed', x === b));
   }));
-  const bonus = body.querySelector('#hit-and-go-again');
-  const bonusEnabled = () => bonus.getAttribute('aria-checked') === 'true';
-  bonus.addEventListener('click', () => {
-    bonus.setAttribute('aria-checked', !bonusEnabled());
+  const enabled = (button) => button.getAttribute('aria-checked') === 'true';
+  body.querySelectorAll('.switch').forEach((button) => button.addEventListener('click', () => {
+    button.setAttribute('aria-checked', !enabled(button));
     sfx.play('toggle');
-  });
+  }));
   body.querySelector('#setup-go').addEventListener('click', () => {
     sfx.play('click');
-    startGame(mode, settings.difficulty, bonusEnabled());
+    startGame({
+      mode,
+      difficulty: settings.difficulty,
+      hitAndGoAgain: enabled(body.querySelector('#hit-and-go-again')),
+      keepShipsApart: enabled(body.querySelector('#keep-ships-apart')),
+    });
   });
 }
 
@@ -917,7 +929,7 @@ function openHelp() {
   const sw = (cls) => `<div class="swatch"><i class="cell ${cls}" style="position:absolute;inset:0"></i></div>`;
   openSheet('How to play', `<div class="help">
     <h3>Deploy</h3>
-    <p>Each side hides five ships on a 10 × 10 grid: Carrier (5), Dreadnought (4), Cruiser (3), Submarine (3) and Corvette (2). Drag a ship on to the grid, tap it to rotate, or let Auto-place do it. Ships may touch but cannot overlap.</p>
+    <p>Each side hides five ships on a 10 × 10 grid: Carrier (5), Dreadnought (4), Cruiser (3), Submarine (3) and Corvette (2). Drag a ship on to the grid, tap it to rotate, or let Auto-place do it. Ships may touch in classic play. With Keep ships apart enabled, leave a one-square gap between ships, including at corners.</p>
     <h3>Engage</h3>
     <p>Tap any square you haven't tried. In classic play, you take one shot per turn. With Hit and go again enabled, a hit or sinking earns another shot and a miss passes the turn.</p>
     <div class="legend">

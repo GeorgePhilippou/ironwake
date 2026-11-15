@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CELLS, UNKNOWN, HIT, randomFleet, shipCells, publicView, mulberry32, isFleetComplete } from '../js/engine.js';
+import { CELLS, UNKNOWN, HIT, FLEET, randomFleet, shipCells, publicView, mulberry32, isFleetComplete } from '../js/engine.js';
 import { chooseShot } from '../js/ai.js';
 import { newGame, commitFleet, takeShot, playerStats, reviveGame } from '../js/game.js';
 
@@ -25,6 +25,19 @@ test('an incomplete or illegal fleet cannot be committed', () => {
   assert.equal(commitFleet(g, 0, fleet(1).slice(0, 4)).ok, false);
   assert.equal(commitFleet(g, 1, fleet(1)).ok, false, 'not player 2\'s turn to place');
   assert.equal(g.phase, 'placement');
+});
+
+test('spacing is enforced at deployment and when restoring either fleet or drafts', () => {
+  const touching = FLEET.map((spec, r) => ({ ...spec, r, c: 0, horiz: true }));
+  assert.ok(commitFleet(newGame(), 0, touching).ok);
+
+  const g = newGame({ keepShipsApart: true });
+  assert.equal(commitFleet(g, 0, touching).ok, false);
+  assert.equal(reviveGame({ ...g, draft: touching.slice(0, 2) }), null);
+  assert.ok(commitFleet(g, 0, randomFleet(mulberry32(6), true), mulberry32(7)).ok);
+  assert.ok(isFleetComplete(g.boards[1].ships, true));
+  assert.deepEqual(reviveGame(JSON.stringify(g)), g);
+  assert.equal(reviveGame({ ...g, boards: [g.boards[0], { ...g.boards[1], ships: touching }] }), null);
 });
 
 test('turns alternate after every legal shot, hit or miss', () => {
@@ -64,8 +77,10 @@ test('hit and go again: hits and sinkings retain the turn, while a miss triggers
 test('saves created before hit and go again resume with classic rules', () => {
   const legacy = soloInBattle();
   delete legacy.hitAndGoAgain;
+  delete legacy.keepShipsApart;
   const g = reviveGame(JSON.stringify(legacy));
   assert.equal(g.hitAndGoAgain, false);
+  assert.equal(g.keepShipsApart, false);
   const cell = shipCells(g.boards[1].ships[0])[0];
   assert.equal(takeShot(g, cell).result, 'hit');
   assert.equal(g.turn, 1);
