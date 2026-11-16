@@ -73,8 +73,8 @@ const mqLight = window.matchMedia('(prefers-color-scheme: light)');
 const reduced = () => (settings.reducedMotion === null ? mqMotion.matches : settings.reducedMotion);
 const isLight = () => (settings.theme === 'auto' ? mqLight.matches : settings.theme === 'light');
 const timing = () => (reduced()
-  ? { aim: 120, hold: 560, sunkHold: 1000, think: 380, result: 500 }
-  : { aim: 280, hold: 760, sunkHold: 1650, think: 720, result: 900 });
+  ? { aim: 120, hold: 1000, sunkHold: 1900, think: 380, result: 500 }
+  : { aim: 280, hold: 1150, sunkHold: 2300, think: 720, result: 900 });
 
 let skinDrawn = false;
 function applySettings() {
@@ -201,7 +201,9 @@ function callout(text, kind, anchor, dur = 1100, small = false) {
   el.textContent = text;
   el.style.left = `${r.left + r.width / 2}px`;
   el.style.top = `${r.top + r.height / 2}px`;
-  el.style.setProperty('--dur', `${dur / SPEED}ms`);
+  // Long enough to read: at least 1.2 s plus a little per letter, so longer messages stay longer.
+  const readable = Math.min(3200, Math.max(dur, 1200 + text.length * 50));
+  el.style.setProperty('--dur', `${readable / SPEED}ms`);
   void el.offsetWidth; // restart the animation
   el.classList.add('show');
 }
@@ -694,7 +696,7 @@ function enterBattle(fresh = false) {
   beginTurn();
   if (fresh) {
     sfx.play('stations');
-    callout(say('battleStations'), 'info', targetBoard.grid, 1300);
+    callout(say('battleStations'), 'info', targetBoard.grid, 1900);
   }
 }
 
@@ -779,13 +781,13 @@ async function playShot(i, result, ship, incoming, withAim) {
     fx.splash(to.x, to.y, scale);
     sfx.play('splash');
     haptic('miss');
-    callout(incoming ? say('theyMissed') : say('miss'), 'miss', ui.grid, 900, incoming);
+    callout(incoming ? say('theyMissed') : say('miss'), 'miss', ui.grid, 1700, incoming);
   } else if (result === 'hit') {
     fx.explosion(to.x, to.y, scale);
     sfx.play('hit');
     haptic('hit');
     shake(ui.host);
-    callout(incoming ? `${name} hit` : say('hit'), 'hit', ui.grid, 900, incoming);
+    callout(incoming ? `${name} hit` : say('hit'), 'hit', ui.grid, 1700, incoming);
   } else {
     sfx.play('sunk');
     haptic('sunk');
@@ -798,7 +800,7 @@ async function playShot(i, result, ship, incoming, withAim) {
         fx.explosion(p.x, p.y, scale * 1.1);
       }, ((n + 1) * 110) / SPEED);
     });
-    callout(incoming ? `${name} lost` : `${name} sunk`, 'sunk', ui.grid, 1500, incoming);
+    callout(incoming ? `${name} lost` : `${name} sunk`, 'sunk', ui.grid, 2600, incoming);
   }
   await wait(result === 'sunk' ? t.sunkHold : t.hold);
   return myGen === gen;
@@ -930,7 +932,7 @@ function onNetEvent(e) {
         if (screen !== 'battle') return;
         beginTurn();
         sfx.play('stations');
-        callout(say('battleStations'), 'info', targetBoard.grid, 1300);
+        callout(say('battleStations'), 'info', targetBoard.grid, 1900);
       });
       break;
     case 'incoming':

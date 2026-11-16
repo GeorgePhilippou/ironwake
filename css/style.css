@@ -706,8 +706,8 @@ button.turn { text-align: left; }
 .callout.info { color: var(--accent); }
 @keyframes callout {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(1.12); }
-  14% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  8% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  86% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -62%) scale(0.98); }
 }
 
