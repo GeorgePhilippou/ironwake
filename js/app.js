@@ -3,7 +3,7 @@
 import {
   FLEET, CELLS, UNKNOWN, MISS, HIT, cellName, shipName, shipCells, isSunk,
   validatePlacement, isFleetComplete, randomFleet, randomSpot, rotatedPlacement,
-  createBoard, publicView, afloat,
+  createBoard, publicView, afloat, shipAt,
 } from './engine.js';
 import { chooseShot, LEVELS } from './ai.js';
 import { newGame, commitFleet, takeShot, playerStats } from './game.js';
@@ -15,6 +15,11 @@ import { shipSVG, EMBLEM, ICONS } from './art.js';
 import { Sfx } from './audio.js';
 import { Fx } from './fx.js';
 import { VERSION } from './version.js';
+import {
+  PROTOCOL, newOnlineGame, newRoomCode, cleanRoomCode, gameFromHello, hello, commitOnline,
+  fireOnline, canFireOnline, receive, requestRematch,
+} from './online.js';
+import { openLink, supportsOnline } from './net.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -45,6 +50,13 @@ let sheetOpen = false;
 let lastBests = { shots: false, time: false };
 let log = [];
 let underFire = false; // solo: the computer is taking its shot
+let link = null; // connection to the other iPad (online mode)
+let netStatus = 'off';
+let joining = null; // { room, since } while a guest looks for a host and has no game yet
+let chain = Promise.resolve(); // online: shot animations play one after another
+let onSheetClose = null;
+let lastNetStatus = 'off';
+const online = () => !!game && game.mode === 'online';
 
 if (game && game.phase === 'over') { game = null; clearGame(); }
 if (game && game.mode === 'duo') game.cover = true; // never reopen straight on to someone's fleet
@@ -73,13 +85,15 @@ mqMotion.addEventListener('change', applySettings);
 mqLight.addEventListener('change', applySettings);
 
 function persist() {
-  if (game && game.phase !== 'over') saveGame(game); else clearGame();
+  // A game whose opponent has left is kept on screen but not saved for resuming.
+  if (game && game.phase !== 'over' && !(game.net && game.net.gone)) saveGame(game); else clearGame();
 }
 
 function bumpGen() {
   gen++;
   busy = false;
   underFire = false;
+  chain = Promise.resolve();
   fx.clear();
   $('callout').className = 'callout';
 }
@@ -255,7 +269,8 @@ function showTitle() {
   $('btn-resume').hidden = !live;
   $('btn-solo').classList.toggle('primary', !live);
   if (live) {
-    const mode = game.mode === 'solo' ? `Solo · ${LEVEL_INFO[game.difficulty].name}` : 'Pass & play';
+    const mode = game.mode === 'solo' ? `Solo · ${LEVEL_INFO[game.difficulty].name}`
+      : game.mode === 'online' ? `Two iPads · Room ${game.net.room}` : 'Pass & play';
     const shots = game.boards.reduce((n, b) => n + b.shots.filter((s) => s !== UNKNOWN).length, 0);
     const where = game.phase === 'placement' ? 'Deploying fleet' : `${shots} shot${shots === 1 ? '' : 's'} fired · ${fmtTime(game.elapsedMs)}`;
     $('resume-detail').textContent = `${mode} · ${where}`;
@@ -273,10 +288,12 @@ async function requestNewGame(mode) {
     });
     if (!ok) return;
   }
-  openSetup(mode);
+  if (mode === 'online') openOnline(); else openSetup(mode);
 }
 
 function startGame(options) {
+  dropLink(true);
+  joining = null;
   bumpGen();
   covered = false;
   log = [];
@@ -291,12 +308,15 @@ function startGame(options) {
 function resumeGame() {
   if (!game) return showTitle();
   sfx.play('click');
-  if (game.phase === 'placement') enterPlacement(); else enterBattle();
+  if (online()) connect();
+  if (game.phase === 'placement' && !(online() && game.net.ready)) enterPlacement(); else enterBattle();
 }
 
 function quitToMenu() {
   bumpGen();
   covered = false;
+  joining = null;
+  dropLink(!!game && game.phase === 'over');
   if (game && game.phase === 'over') game = null;
   else if (game && game.mode === 'duo') game.cover = true;
   persist();
@@ -313,12 +333,14 @@ const draft = () => game.draft;
 function enterPlacement() {
   showScreen('place');
   const duo = game.mode === 'duo';
-  $('place-eyebrow').textContent = duo ? `Pass & play · Player ${game.placing + 1}` : `Solo mission · ${LEVEL_INFO[game.difficulty].name}`;
+  $('place-eyebrow').textContent = online() ? `Two iPads · ${game.net.role === 'host' ? 'Hosting' : 'Joined'} room ${game.net.room}`
+    : duo ? `Pass & play · Player ${game.placing + 1}` : `Solo mission · ${LEVEL_INFO[game.difficulty].name}`;
   $('place-title').textContent = 'Deploy your fleet';
   $('place-hint').textContent = game.keepShipsApart
     ? 'Leave a one-square gap between ships, including at corners. Tap to rotate.'
     : 'Drag to place · tap to rotate · drag off the grid to remove';
   renderPlacement();
+  renderNet();
   if (duo && game.cover) showCover();
 }
 
@@ -482,6 +504,16 @@ $('btn-clear').addEventListener('click', () => {
 });
 $('btn-deploy').addEventListener('click', () => {
   if (drag || !game || game.phase !== 'placement') return;
+  if (online()) {
+    const r = commitOnline(game, draft());
+    if (!r.ok) return toast('Place all five ships first.', { warn: true });
+    persist();
+    r.send.forEach(send);
+    sfx.play('deploy');
+    haptic('place');
+    enterBattle(r.events.some((e) => e.type === 'battle'));
+    return;
+  }
   const res = commitFleet(game, game.placing, draft());
   if (!res.ok) return toast('Place all five ships first.', { warn: true });
   persist();
@@ -492,11 +524,12 @@ $('btn-deploy').addEventListener('click', () => {
 $('place-back').addEventListener('click', () => { sfx.play('click'); quitToMenu(); });
 
 // ───────── Battle ─────────
-const nameOf = (p) => (game.mode === 'solo' ? (p === 0 ? 'You' : 'Enemy') : `Player ${p + 1}`);
+const nameOf = (p) => (game.mode === 'solo' ? (p === 0 ? 'You' : 'Enemy') : game.mode === 'online' ? (p === 0 ? 'You' : 'Opponent') : `Player ${p + 1}`);
 
 function canFire() {
-  return screen === 'battle' && game && game.phase === 'battle' && !busy && !covered && !sheetOpen
-    && (game.mode === 'duo' || game.turn === 0);
+  if (!(screen === 'battle' && game && game.phase === 'battle' && !busy && !covered && !sheetOpen)) return false;
+  if (game.mode === 'online') return canFireOnline(game) && netStatus === 'connected';
+  return game.mode === 'duo' || game.turn === 0;
 }
 
 function setTurn(state, main, sub) {
@@ -538,7 +571,8 @@ function paintBattle({ fresh = -1, freshShip = null, freshOn = null } = {}) {
     freshShip: freshOn === 'own' ? freshShip : null,
   });
   $('enemy-fleet').innerHTML = fleetRows(theirs, freshOn === 'target' ? freshShip : null);
-  $('enemy-count').textContent = `${afloat(theirs).length} / ${FLEET.length} afloat`;
+  const theirAfloat = online() && viewer === 0 ? FLEET.length - theirs.ships.filter((s) => isSunk(theirs, s)).length : afloat(theirs).length;
+  $('enemy-count').textContent = `${theirAfloat} / ${FLEET.length} afloat`;
   $('own-count').textContent = `${afloat(mine).length} / ${FLEET.length} afloat`;
   const st = playerStats(game, viewer);
   $('ro-shots').textContent = st.shots;
@@ -569,7 +603,14 @@ function enterBattle(fresh = false) {
   showScreen('battle');
   log = [];
   if (game.last) logShot(game.last.by, game.last.cell, game.last.result, game.last.shipId);
-  viewer = game.mode === 'solo' ? 0 : game.turn;
+  viewer = game.mode === 'duo' ? game.turn : 0;
+  renderNet();
+  if (online() && game.phase === 'placement') {
+    underFire = false;
+    paintBattle();
+    setTurn('p2', 'Fleet deployed', 'Waiting for your opponent to deploy…');
+    return;
+  }
   if (game.mode === 'duo' && game.cover) {
     blankBattle();
     showCover();
@@ -583,6 +624,7 @@ function enterBattle(fresh = false) {
 }
 
 function beginTurn() {
+  if (online()) return beginOnlineTurn();
   viewer = game.mode === 'solo' ? 0 : game.turn;
   underFire = false;
   paintBattle();
@@ -618,12 +660,12 @@ function playerFire(i, cellEl) {
     sfx.play('error');
     return;
   }
+  if (online()) return fireAtOpponent(i);
   resolveShot(i);
 }
 
 async function resolveShot(i) {
   if (busy) return;
-  const myGen = gen;
   const res = takeShot(game, i);
   if (!res.ok) return;
   busy = true;
@@ -633,53 +675,450 @@ async function resolveShot(i) {
   persist();
   logShot(res.by, i, res.result, res.ship && res.ship.id);
   refreshLive();
+  if (!(await playShot(i, res.result, res.ship, res.by !== viewer, true))) return;
+  busy = false;
+  if (game.phase === 'over') return showResult();
+  if (game.cover) return showCover();
+  beginTurn();
+}
 
+/** Animate one shot landing. Resolves false if the match was abandoned meanwhile. */
+async function playShot(i, result, ship, incoming, withAim) {
+  const myGen = gen;
   const t = timing();
-  const incoming = res.by !== viewer;
   const ui = incoming ? ownBoard : targetBoard;
-  const aim = ui.cellCenter(i);
-  sfx.play('fire');
-  if (!incoming) haptic('tap');
-  fx.aim(aim.x, aim.y, ui.cellSize(), t.aim / SPEED);
-  await wait(t.aim);
-  if (myGen !== gen) return;
-
+  if (withAim) {
+    const aim = ui.cellCenter(i);
+    sfx.play('fire');
+    if (!incoming) haptic('tap');
+    fx.aim(aim.x, aim.y, ui.cellSize(), t.aim / SPEED);
+    await wait(t.aim);
+    if (myGen !== gen) return false;
+  }
+  const name = ship ? shipName(ship.id) : 'Ship';
   const freshOn = incoming ? 'own' : 'target';
-  paintBattle({ fresh: i, freshShip: res.result === 'sunk' ? res.ship.id : null, freshOn });
+  paintBattle({ fresh: i, freshShip: result === 'sunk' && ship ? ship.id : null, freshOn });
   const to = ui.cellCenter(i);
   const scale = clamp(ui.cellSize() / 58, 0.45, 1.25);
-  if (res.result === 'miss') {
+  if (result === 'miss') {
     fx.splash(to.x, to.y, scale);
     sfx.play('splash');
     haptic('miss');
     callout(incoming ? 'They missed' : 'Miss', 'miss', ui.grid, 900, incoming);
-  } else if (res.result === 'hit') {
+  } else if (result === 'hit') {
     fx.explosion(to.x, to.y, scale);
     sfx.play('hit');
     haptic('hit');
     shake(ui.host);
-    callout(incoming ? `${shipName(res.ship.id)} hit` : 'Hit', 'hit', ui.grid, 900, incoming);
+    callout(incoming ? `${name} hit` : 'Hit', 'hit', ui.grid, 900, incoming);
   } else {
     sfx.play('sunk');
     haptic('sunk');
     shake(ui.host, true);
     fx.explosion(to.x, to.y, scale * 1.1);
-    shipCells(res.ship).filter((c) => c !== i).forEach((c, n) => {
+    (ship ? shipCells(ship) : []).filter((c) => c !== i).forEach((c, n) => {
       setTimeout(() => {
         if (myGen !== gen) return;
         const p = ui.cellCenter(c);
         fx.explosion(p.x, p.y, scale * 1.1);
       }, ((n + 1) * 110) / SPEED);
     });
-    callout(incoming ? `${shipName(res.ship.id)} lost` : `${shipName(res.ship.id)} sunk`, 'sunk', ui.grid, 1500, incoming);
+    callout(incoming ? `${name} lost` : `${name} sunk`, 'sunk', ui.grid, 1500, incoming);
   }
+  await wait(result === 'sunk' ? t.sunkHold : t.hold);
+  return myGen === gen;
+}
 
-  await wait(res.result === 'sunk' ? t.sunkHold : t.hold);
-  if (myGen !== gen) return;
+// ───────── Two iPads ─────────
+function send(msg) { if (link) link.send(msg); }
+
+function connect() {
+  const role = online() ? game.net.role : 'guest';
+  const room = online() ? game.net.room : joining && joining.room;
+  if (!room) return;
+  if (link && link.room === room && link.role === role) { link.poke(); return; }
+  dropLink(false);
+  const me = openLink({
+    role,
+    room,
+    local: params.get('net') === 'local',
+    onOpen: () => {
+      if (link !== me) return;
+      if (online()) {
+        send(hello(game));
+        if (game.net.rematch) send({ t: 'rematch', ...game.net.rematch });
+      } else if (joining) {
+        send({ t: 'hello', v: PROTOCOL, match: null });
+      }
+    },
+    onMessage: (msg) => { if (link === me) onNet(msg); },
+    onStatus: (status) => { if (link === me) { netStatus = status; renderNet(); } },
+  });
+  me.room = room;
+  me.role = role;
+  link = me;
+  netStatus = 'connecting';
+  renderNet();
+}
+
+function dropLink(farewell) {
+  if (link) link.close(farewell ? { t: 'bye' } : null);
+  link = null;
+  netStatus = 'off';
+  renderNet();
+}
+
+const NET_TEXT = {
+  connecting: () => 'Connecting…',
+  waiting: (room) => `Room <b>${room}</b><span class="long"> · waiting for the other iPad</span>`,
+  searching: (room) => `Looking for room <b>${room}</b>`,
+  connected: (room) => `Connected<span class="long"> · room ${room}</span>`,
+  offline: () => 'No connection',
+  unsupported: () => 'Not supported here',
+  left: () => 'Opponent left',
+  off: () => 'Not connected',
+};
+
+function renderNet() {
+  const room = online() ? game.net.room : joining ? joining.room : '';
+  const show = !!room && (online() || joining);
+  const html = (NET_TEXT[netStatus] || NET_TEXT.off)(room);
+  for (const id of ['place-net', 'battle-net']) {
+    const el = $(id);
+    el.hidden = !show;
+    if (!show) continue;
+    el.dataset.s = netStatus;
+    const span = el.querySelector('span');
+    if (span.innerHTML !== html) span.innerHTML = html;
+  }
+  const wait = $('net-wait');
+  if (wait) {
+    wait.querySelector('span').innerHTML = netStatus === 'connected' ? 'Connected!' : html;
+    wait.querySelector('i').style.background = netStatus === 'connected' ? 'var(--accent)' : '';
+  }
+  if (screen === 'battle' && online() && !busy) refreshOnlineTurn();
+  else refreshLive();
+  // Host: the other iPad just arrived while the room card is up.
+  const arrived = netStatus === 'connected' && lastNetStatus !== 'connected';
+  lastNetStatus = netStatus;
+  if (arrived && sheetOpen && $('room-card')) {
+    const myGen = gen;
+    setTimeout(() => { if (myGen === gen && $('room-card')) closeSheet(); }, 900 / SPEED);
+  }
+}
+
+function onNet(msg) {
+  if (!msg || typeof msg.t !== 'string') return;
+  // Guest: the host tells us which match we're in.
+  if (msg.t === 'hello' && link && link.role === 'guest' && typeof msg.match === 'string' && msg.match
+      && (!online() || (game.net.match !== msg.match && msg.prev !== game.net.match && game.net.prev !== msg.match))) {
+    if (msg.v !== PROTOCOL) return versionMismatch();
+    return adoptHostGame(msg);
+  }
+  if (!online()) return;
+  const out = receive(game, msg);
+  persist();
+  out.send.forEach(send);
+  for (const e of out.events) onNetEvent(e);
+}
+
+function adoptHostGame(msg) {
+  const fresh = gameFromHello(msg, link.room);
+  if (!fresh) return;
+  const wasOnline = online();
+  bumpGen();
+  joining = null;
+  game = fresh;
+  log = [];
+  persist();
+  send(hello(game));
+  onSheetClose = null;
+  closeSheet();
+  $('result').hidden = true;
+  sfx.play('ping');
+  toast(wasOnline ? 'The host started a new game' : `Joined room ${game.net.room}`);
+  enterPlacement();
+}
+
+function queue(fn) {
+  const myGen = gen;
+  chain = chain.then(() => (myGen === gen ? fn() : null)).catch((e) => console.error(e));
+}
+
+function onNetEvent(e) {
+  switch (e.type) {
+    case 'their-ready':
+      if (game.phase === 'placement' && !game.net.ready) toast('Your opponent has deployed their fleet');
+      break;
+    case 'battle':
+      queue(() => {
+        if (screen !== 'battle') return;
+        beginTurn();
+        sfx.play('ping');
+        callout('Battle stations', 'info', targetBoard.grid, 1300);
+      });
+      break;
+    case 'incoming':
+    case 'outgoing':
+      queue(() => animateOnline(e));
+      break;
+    case 'reveal':
+      queue(() => { if (screen === 'battle') paintBattle(); });
+      break;
+    case 'offer':
+      renderRematch();
+      sfx.play('ping');
+      break;
+    case 'start':
+      beginRematch(e);
+      break;
+    case 'left':
+      opponentLeft();
+      break;
+    case 'desync':
+      outOfStep();
+      break;
+    case 'version':
+      versionMismatch();
+      break;
+    default:
+      break;
+  }
+}
+
+function fireAtOpponent(i) {
+  const r = fireOnline(game, i);
+  if (!r.ok) return;
+  persist();
+  r.send.forEach(send);
+  const aim = targetBoard.cellCenter(i);
+  sfx.play('fire');
+  haptic('tap');
+  fx.aim(aim.x, aim.y, targetBoard.cellSize(), timing().aim / SPEED);
+  refreshOnlineTurn();
+}
+
+async function animateOnline(e) {
+  busy = true;
+  refreshLive();
+  const incoming = e.type === 'incoming';
+  logShot(incoming ? 1 : 0, e.cell, e.result, e.ship && e.ship.id);
+  if (e.over) recordResult();
+  const ship = e.ship || (incoming ? shipAt(game.boards[0], e.cell) : null);
+  if (!(await playShot(e.cell, e.result, ship, incoming, incoming))) return;
   busy = false;
   if (game.phase === 'over') return showResult();
-  if (game.cover) return showCover();
   beginTurn();
+}
+
+function beginOnlineTurn() {
+  viewer = 0;
+  paintBattle();
+  refreshOnlineTurn();
+}
+
+function refreshOnlineTurn() {
+  if (!online() || game.phase !== 'battle') { refreshLive(); return; }
+  const linked = netStatus === 'connected';
+  const away = netStatus === 'left' ? 'Your opponent left this game' : 'Reconnecting to the other iPad…';
+  underFire = game.turn === 1;
+  if (game.turn === 0) {
+    const extra = game.hitAndGoAgain && game.last && game.last.by === 0;
+    if (game.net.pending !== null) setTurn('you', 'Firing…', linked ? `${cellName(game.net.pending)} — waiting for the result` : away);
+    else setTurn('you', 'Your turn', linked ? (extra ? 'Fire again' : 'Choose a square to fire on') : away);
+  } else {
+    setTurn('enemy', 'Their turn', linked ? 'Waiting for their shot…' : away);
+  }
+}
+
+function beginRematch({ match, first }) {
+  const old = game;
+  bumpGen();
+  $('result').hidden = true;
+  closeSheet();
+  game = newOnlineGame({
+    role: old.net.role,
+    room: old.net.room,
+    match,
+    first,
+    prev: old.net.match,
+    hitAndGoAgain: old.hitAndGoAgain,
+    keepShipsApart: old.keepShipsApart,
+  });
+  log = [];
+  persist();
+  send(hello(game));
+  enterPlacement();
+  toast(first === game.net.role ? 'Rematch! You fire first this time.' : 'Rematch! They fire first this time.');
+}
+
+function renderRematch() {
+  if (!online()) return;
+  const btn = $('btn-rematch');
+  const { net } = game;
+  const gone = netStatus === 'left';
+  btn.disabled = gone || (!!net.rematch && !net.offer);
+  btn.textContent = gone ? 'Opponent left' : net.offer ? 'Accept rematch' : net.rematch ? 'Waiting for opponent…' : 'Rematch';
+  $('result-badges').innerHTML = net.offer && !gone ? '<p class="offer">Your opponent wants a rematch</p>' : '';
+}
+
+async function opponentLeft() {
+  dropLink(false); // they left on purpose: stop redialling
+  game.net.gone = true;
+  persist();
+  netStatus = 'left';
+  renderNet();
+  if (game.phase === 'over') { renderRematch(); toast('Your opponent left'); return; }
+  const back = await confirmDialog({ title: 'Your opponent left', text: 'They ended this game on their iPad.', yes: 'Back to menu', no: 'Stay here' });
+  if (back) leaveOnline(false);
+}
+
+async function outOfStep() {
+  const back = await confirmDialog({
+    title: 'Game out of step',
+    text: 'The other iPad no longer has this game. Go back to the menu and start a new one together.',
+    yes: 'Back to menu',
+    no: 'Stay here',
+  });
+  if (back) leaveOnline(true);
+}
+
+function versionMismatch() {
+  toast('The two iPads have different versions of Ironwake. Open it on both while online to update, then try again.', { warn: true, ms: 6000 });
+}
+
+function leaveOnline(farewell) {
+  bumpGen();
+  dropLink(farewell);
+  joining = null;
+  game = null;
+  clearGame();
+  closeSheet();
+  $('result').hidden = true;
+  showTitle();
+}
+
+function openOnline() {
+  if (!supportsOnline()) {
+    openSheet('Two iPads', '<p>This browser cannot make direct connections. Open Ironwake in Safari on each iPad.</p>');
+    return;
+  }
+  const body = openSheet('Two iPads', `
+    <p>Play against someone on another iPad. Both iPads should be on the same Wi-Fi. One of you hosts and the other joins with the room code.</p>
+    <div class="choice" style="margin-top:16px">
+      <button class="btn primary stack" id="on-host">Host a game<small>Get a room code to share</small></button>
+      <button class="btn stack" id="on-join">Join a game<small>Enter the code from the other iPad</small></button>
+    </div>`);
+  body.querySelector('#on-host').addEventListener('click', () => { sfx.play('click'); openHostSetup(); });
+  body.querySelector('#on-join').addEventListener('click', () => { sfx.play('click'); openJoin(); });
+}
+
+function openHostSetup() {
+  const ruleSwitch = (id, title, description) => `<div class="row">
+    <div class="lbl"><b>${title}</b><span>${description}</span></div>
+    <button type="button" id="${id}" class="switch" role="switch" aria-checked="false" aria-label="${title}"></button></div>`;
+  const body = openSheet('Host a game', `
+    ${ruleSwitch('hit-and-go-again', 'Hit and go again', 'Hit or sink a ship to fire again. A miss ends your turn.')}
+    ${ruleSwitch('keep-ships-apart', 'Keep ships apart', 'Leave a one-square gap between ships, including at corners.')}
+    <p style="margin-top:12px">The rules you choose apply to both iPads. You fire first.</p>
+    <div class="card-actions"><button class="btn primary" id="host-go">Create room</button></div>`);
+  const enabled = (b) => b.getAttribute('aria-checked') === 'true';
+  body.querySelectorAll('.switch').forEach((b) => b.addEventListener('click', () => {
+    b.setAttribute('aria-checked', !enabled(b));
+    sfx.play('toggle');
+  }));
+  body.querySelector('#host-go').addEventListener('click', () => {
+    sfx.play('click');
+    startHost({
+      hitAndGoAgain: enabled(body.querySelector('#hit-and-go-again')),
+      keepShipsApart: enabled(body.querySelector('#keep-ships-apart')),
+    });
+  });
+}
+
+function startHost(rules) {
+  dropLink(true);
+  joining = null;
+  bumpGen();
+  covered = false;
+  log = [];
+  $('result').hidden = true;
+  $('cover').hidden = true;
+  game = newOnlineGame({ role: 'host', room: newRoomCode(), ...rules });
+  persist();
+  connect();
+  enterPlacement();
+  openRoomCard();
+}
+
+function openRoomCard() {
+  if (!online()) return;
+  const room = game.net.room;
+  const host = game.net.role === 'host';
+  const body = openSheet(host ? 'Your room' : `Room ${room}`, `<div id="room-card">
+    ${host ? '<p>On the other iPad, open Ironwake, choose <b>Two iPads → Join a game</b> and enter:</p>' : '<p>You joined this room.</p>'}
+    <div class="room-code" aria-label="Room code ${room.split('').join(' ')}">${[...room].map((ch) => `<b>${ch}</b>`).join('')}</div>
+    <div class="wait-line" id="net-wait"><i></i><span></span></div>
+    <p style="margin-top:12px;font-size:14px">You can deploy your fleet while you wait. Both iPads need to be on the same Wi-Fi.</p>
+    <div class="card-actions"><button class="btn primary" id="room-ok">${host ? 'Start deploying' : 'OK'}</button></div></div>`);
+  body.querySelector('#room-ok').addEventListener('click', () => { sfx.play('click'); closeSheet(); });
+  renderNet();
+}
+
+function openJoin(prefill = '') {
+  const body = openSheet('Join a game', `
+    <p>Enter the four-letter room code shown on the other iPad.</p>
+    <input class="code-input" id="join-code" maxlength="6" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" inputmode="text" enterkeyhint="go" aria-label="Room code" value="${prefill}">
+    <p id="join-error" style="color:var(--red);min-height:1.4em;font-size:14px"></p>
+    <div class="card-actions"><button class="btn primary" id="join-go">Join</button></div>`);
+  const input = body.querySelector('#join-code');
+  const go = () => {
+    const code = cleanRoomCode(input.value);
+    if (!code) {
+      body.querySelector('#join-error').textContent = 'Room codes are four letters, like KXRT.';
+      sfx.play('error');
+      return;
+    }
+    input.blur();
+    sfx.play('click');
+    startJoin(code);
+  };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  input.addEventListener('input', () => { body.querySelector('#join-error').textContent = ''; });
+  body.querySelector('#join-go').addEventListener('click', go);
+  setTimeout(() => input.focus(), 60);
+}
+
+function startJoin(code) {
+  if (online() && game.net.room === code && game.net.role === 'guest') {
+    closeSheet();
+    resumeGame();
+    return;
+  }
+  dropLink(online());
+  bumpGen();
+  game = null;
+  clearGame();
+  log = [];
+  joining = { room: code, since: Date.now() };
+  connect();
+  const body = openSheet(`Joining ${code}`, `
+    <div class="wait-line" id="net-wait"><i></i><span></span></div>
+    <p style="margin-top:14px">Make sure the other iPad has created room <b>${code}</b> and is showing it, and that both iPads are on the same Wi-Fi.</p>
+    <div class="card-actions two">
+      <button class="btn" id="join-cancel">Cancel</button>
+      <button class="btn" id="join-edit">Change code</button>
+    </div>`);
+  onSheetClose = () => { if (joining) { joining = null; dropLink(false); showTitle(); } };
+  body.querySelector('#join-cancel').addEventListener('click', () => { sfx.play('click'); closeSheet(); });
+  body.querySelector('#join-edit').addEventListener('click', () => {
+    sfx.play('click');
+    onSheetClose = null;
+    joining = null;
+    dropLink(false);
+    openJoin(code);
+  });
+  renderNet();
 }
 
 // ───────── Pass-and-play handover ─────────
@@ -732,6 +1171,9 @@ function recordResult() {
   if (game.mode === 'solo') {
     const st = playerStats(game, 0);
     lastBests = recordSolo(stats, { difficulty: game.difficulty, won: game.winner === 0, shots: st.shots, hits: st.hits, ms: game.elapsedMs });
+  } else if (game.mode === 'online') {
+    stats.online.played++;
+    if (game.winner === 0) stats.online.won++;
   } else {
     stats.duo.played++;
   }
@@ -742,7 +1184,8 @@ const statTile = (value, label, best = false) => `<div class="stat${best ? ' bes
 
 async function showResult() {
   const myGen = gen;
-  const solo = game.mode === 'solo';
+  const solo = game.mode === 'solo' || game.mode === 'online';
+  const vsHuman = game.mode === 'online';
   const won = game.winner === 0;
   viewer = solo ? 0 : game.winner;
   underFire = false;
@@ -758,15 +1201,19 @@ async function showResult() {
   if (solo) {
     const me = playerStats(game, 0);
     const foe = playerStats(game, 1);
+    const where = vsHuman ? '' : ` on ${LEVEL_INFO[game.difficulty].name}`;
     $('result-sub').textContent = won
-      ? `Enemy fleet destroyed on ${LEVEL_INFO[game.difficulty].name}.`
-      : `Your fleet was lost on ${LEVEL_INFO[game.difficulty].name}. ${5 - me.sunk} enemy ship${5 - me.sunk === 1 ? '' : 's'} survived.`;
-    $('result-badges').innerHTML = [lastBests.shots && 'New best · fewest shots', lastBests.time && 'New best · fastest win']
+      ? (vsHuman ? 'You sank their whole fleet.' : `Enemy fleet destroyed${where}.`)
+      : `Your fleet was lost${where}. ${5 - me.sunk} ${vsHuman ? 'of their ships' : `enemy ship${5 - me.sunk === 1 ? '' : 's'}`} survived.`;
+    $('result-badges').innerHTML = vsHuman ? '' : [lastBests.shots && 'New best · fewest shots', lastBests.time && 'New best · fastest win']
       .filter(Boolean).map((b) => `<span class="badge">${b}</span> `).join('');
     $('result-stats').innerHTML = `<div class="stats">
       ${statTile(pct(me.accuracy), 'Accuracy')}${statTile(me.shots, 'Shots', lastBests.shots)}${statTile(me.hits, 'Hits')}
-      ${statTile(time, 'Time', lastBests.time)}${statTile(`${me.lost}/5`, 'Ships lost')}${statTile(pct(foe.accuracy), 'Enemy acc.')}</div>`;
+      ${statTile(time, 'Time', !vsHuman && lastBests.time)}${statTile(`${me.lost}/5`, 'Ships lost')}${statTile(pct(foe.accuracy), vsHuman ? 'Their acc.' : 'Enemy acc.')}</div>`;
+    if (vsHuman) renderRematch(); else { $('btn-rematch').textContent = 'Rematch'; $('btn-rematch').disabled = false; }
   } else {
+    $('btn-rematch').textContent = 'Rematch';
+    $('btn-rematch').disabled = false;
     $('result-sub').textContent = `Battle time ${time}.`;
     $('result-badges').innerHTML = '';
     $('result-stats').innerHTML = `<div class="versus">${[0, 1].map((p) => {
@@ -780,7 +1227,13 @@ async function showResult() {
   else { sfx.play('win'); haptic('win'); fx.fireworks(); }
 }
 
-$('btn-rematch').addEventListener('click', () => { sfx.play('click'); startGame(game); });
+$('btn-rematch').addEventListener('click', () => {
+  sfx.play('click');
+  if (!online()) { startGame(game); return; }
+  const r = requestRematch(game);
+  r.send.forEach(send);
+  if (r.start) beginRematch(r.start); else renderRematch();
+});
 $('btn-review').addEventListener('click', () => { sfx.play('click'); $('result').hidden = true; });
 $('btn-result-menu').addEventListener('click', () => { sfx.play('click'); quitToMenu(); });
 $('turn').addEventListener('click', () => {
@@ -789,6 +1242,7 @@ $('turn').addEventListener('click', () => {
 
 // ───────── Sheets ─────────
 function openSheet(title, html) {
+  if (sheetOpen && onSheetClose) { const hook = onSheetClose; onSheetClose = null; hook(); }
   $('sheet-title').textContent = title;
   $('sheet-body').innerHTML = html;
   $('sheet-body').scrollTop = 0;
@@ -798,9 +1252,13 @@ function openSheet(title, html) {
   return $('sheet-body');
 }
 function closeSheet() {
+  const wasOpen = sheetOpen;
   $('sheet').hidden = true;
   sheetOpen = false;
   refreshLive();
+  const hook = onSheetClose;
+  onSheetClose = null;
+  if (wasOpen && hook) hook();
 }
 $('sheet-close').addEventListener('click', () => { sfx.play('click'); closeSheet(); });
 $('sheet').addEventListener('click', (e) => { if (e.target === $('sheet')) closeSheet(); });
@@ -911,11 +1369,11 @@ function openStats() {
   const body = openSheet('Service record', `
     <div class="stats">
       ${statTile(played, 'Solo battles')}${statTile(won, 'Victories')}${statTile(played ? pct(won / played) : '–', 'Win rate')}
-      ${statTile(stats.streak, 'Win streak')}${statTile(stats.bestStreak, 'Best streak')}${statTile(stats.duo.played, 'Pass & play')}
+      ${statTile(stats.streak, 'Win streak')}${statTile(stats.bestStreak, 'Best streak')}${statTile(stats.duo.played, 'Pass & play')}${statTile(`${stats.online.won}/${stats.online.played}`, 'Two-iPad wins')}
     </div>
     <table class="rec"><thead><tr><th>Level</th><th>Played</th><th>Won</th><th>Best</th><th>Fastest</th><th>Accuracy</th></tr></thead>
       <tbody>${rows}</tbody></table>
-    <div class="card-actions"><button class="btn danger" id="stats-reset"${played || stats.duo.played ? '' : ' disabled'}>Reset record</button></div>`);
+    <div class="card-actions"><button class="btn danger" id="stats-reset"${played || stats.duo.played || stats.online.played ? '' : ' disabled'}>Reset record</button></div>`);
   body.querySelector('#stats-reset').addEventListener('click', async () => {
     const ok = await confirmDialog({ title: 'Reset your record?', text: 'All saved statistics will be erased. This cannot be undone.', yes: 'Reset', danger: true });
     if (!ok) return;
@@ -941,6 +1399,8 @@ function openHelp() {
     <p>Sink all five enemy ships before yours go down. The fleet panel shows what's still afloat.</p>
     <h3>Pass &amp; play</h3>
     <p>Two players share one ${DEVICE}. When the turn passes, a handover screen hides both fleets until the next player says they're ready.</p>
+    <h3>Two iPads</h3>
+    <p>Each player uses their own iPad on the same Wi-Fi. One chooses <b>Two iPads → Host a game</b> and reads out the four-letter room code; the other chooses <b>Join a game</b> and types it in. Your fleet never leaves your iPad until a ship is sunk. If an iPad goes to sleep, the game reconnects by itself when it wakes.</p>
     <h3>Opponents</h3>
     <p><b>Easy</b> fires at random. <b>Normal</b> hunts, then follows up its hits. <b>Hard</b> works out the odds of a ship on every square from the ships still afloat.</p>
   </div>`);
@@ -948,15 +1408,22 @@ function openHelp() {
 
 function openPause() {
   if (game && game.phase === 'over') { $('result').hidden = false; return; }
-  const body = openSheet('Paused', `
-    <p>Your battle is saved automatically — you can close the app and pick it up later.</p>
+  const net = online();
+  const body = openSheet(net ? 'Menu' : 'Paused', `
+    <p>${net ? 'The game keeps going on the other iPad. It is saved here, so you can come back to it.' : 'Your battle is saved automatically — you can close the app and pick it up later.'}</p>
     <div class="card-actions">
-      <button class="btn primary" data-act="resume">Resume</button>
+      <button class="btn primary" data-act="resume">${net ? 'Back to the game' : 'Resume'}</button>
+      ${net ? '<button class="btn" data-act="room">Room code</button>' : ''}
       <button class="btn" data-act="help">How to play</button>
       <button class="btn" data-act="settings">Settings</button>
       <button class="btn" data-act="quit">Save &amp; exit to menu</button>
+      ${net ? '<button class="btn danger" data-act="leave">Leave this game</button>' : ''}
     </div>`);
-  const acts = { resume: closeSheet, help: openHelp, settings: openSettings, quit: quitToMenu };
+  const leave = async () => {
+    const ok = await confirmDialog({ title: 'Leave this game?', text: 'It ends for both of you, and your opponent is told you left.', yes: 'Leave', danger: true });
+    if (ok) leaveOnline(true);
+  };
+  const acts = { resume: closeSheet, help: openHelp, settings: openSettings, quit: quitToMenu, room: openRoomCard, leave };
   body.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => { sfx.play('click'); acts[b.dataset.act](); }));
 }
 
@@ -969,6 +1436,8 @@ $('foot').textContent = `v${VERSION}`;
 $('btn-resume').addEventListener('click', resumeGame);
 $('btn-solo').addEventListener('click', () => requestNewGame('solo'));
 $('btn-duo').addEventListener('click', () => requestNewGame('duo'));
+$('btn-online').addEventListener('click', () => requestNewGame('online'));
+for (const id of ['place-net', 'battle-net']) $(id).addEventListener('click', () => { sfx.play('click'); openRoomCard(); });
 $('btn-stats').addEventListener('click', () => { sfx.play('click'); openStats(); });
 $('btn-help').addEventListener('click', () => { sfx.play('click'); openHelp(); });
 $('btn-settings').addEventListener('click', () => { sfx.play('click'); openSettings(); });
@@ -1030,6 +1499,6 @@ showTitle();
 // Small inspection hook for automated play-testing.
 window.__ironwake = {
   get game() { return game; },
-  get state() { return { screen, viewer, busy, covered, sheetOpen, gen }; },
+  get state() { return { screen, viewer, busy, covered, sheetOpen, gen, netStatus, joining: !!joining }; },
   get stats() { return stats; },
 };

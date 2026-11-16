@@ -21,6 +21,7 @@ export function shippedFiles() {
     'manifest.webmanifest',
     ...list('css', (f) => f.endsWith('.css')),
     ...list('js', (f) => f.endsWith('.js')),
+    ...list('vendor', (f) => f.endsWith('.js')),
     ...list('icons', (f) => /\.(png|svg)$/.test(f) && f !== 'icon.svg'),
   ];
 }

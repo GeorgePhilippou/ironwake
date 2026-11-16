@@ -63,7 +63,10 @@
       <nav class="menu" aria-label="Main menu">
         <button class="btn primary stack" id="btn-resume" hidden>Resume battle<small id="resume-detail"></small></button>
         <button class="btn primary stack" id="btn-solo">Solo mission<small>Take on the computer</small></button>
-        <button class="btn stack" id="btn-duo">Pass &amp; play<small id="duo-detail">Two players, one screen</small></button>
+        <div class="menu-pair">
+          <button class="btn stack" id="btn-duo">Pass &amp; play<small id="duo-detail">Two players, one screen</small></button>
+          <button class="btn stack" id="btn-online">Two iPads<small id="online-detail">Same Wi-Fi, one each</small></button>
+        </div>
         <div class="menu-row">
           <button class="btn" id="btn-stats"><span data-icon="chart"></span>Record</button>
           <button class="btn" id="btn-help"><span data-icon="help"></span>How to play</button>
@@ -82,6 +85,7 @@
         <span class="eyebrow" id="place-eyebrow"></span>
         <strong id="place-title">Deploy your fleet</strong>
       </div>
+      <button class="net-chip" id="place-net" hidden><i></i><span></span></button>
     </header>
     <div class="stage"><div class="stage-in">
       <div class="board placing" id="place-board"></div>
@@ -108,6 +112,7 @@
         <span class="turn-dot"></span>
         <span><strong id="turn-main"></strong><span id="turn-sub"></span></span>
       </button>
+      <button class="net-chip" id="battle-net" hidden><i></i><span></span></button>
       <div class="readout">
         <span><b id="ro-shots">0</b>shots</span>
         <span><b id="ro-acc">–</b>accuracy</span>

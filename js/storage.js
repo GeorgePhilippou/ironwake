@@ -3,6 +3,7 @@
 
 import { LEVELS } from './ai.js';
 import { reviveGame } from './game.js';
+import { reviveOnline } from './online.js';
 
 const KEYS = { settings: 'ironwake.settings.v1', stats: 'ironwake.stats.v1', game: 'ironwake.game.v1' };
 
@@ -37,6 +38,7 @@ const blankLevel = () => ({ played: 0, won: 0, shots: 0, hits: 0, bestShots: nul
 export const blankStats = () => ({
   solo: { easy: blankLevel(), normal: blankLevel(), hard: blankLevel() },
   duo: { played: 0 },
+  online: { played: 0, won: 0 },
   streak: 0,
   bestStreak: 0,
 });
@@ -57,6 +59,8 @@ export function loadStats() {
     t.bestMs = Number.isFinite(r.bestMs) && r.bestMs > 0 ? r.bestMs : null;
   }
   s.duo.played = num(raw.duo && raw.duo.played);
+  s.online.played = num(raw.online && raw.online.played);
+  s.online.won = Math.min(num(raw.online && raw.online.won), s.online.played);
   s.streak = num(raw.streak);
   s.bestStreak = Math.max(num(raw.bestStreak), s.streak);
   return s;
@@ -89,7 +93,9 @@ export function loadGame() {
   let raw = null;
   try { raw = localStorage.getItem(KEYS.game); } catch { return null; }
   if (!raw) return null;
-  const game = reviveGame(raw);
+  let mode = null;
+  try { mode = JSON.parse(raw).mode; } catch { /* corrupt */ }
+  const game = mode === 'online' ? reviveOnline(raw) : reviveGame(raw);
   if (!game) clearGame();
   return game;
 }

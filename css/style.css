@@ -917,3 +917,84 @@ table.rec th:first-child, table.rec td:first-child { text-align: left; font: 700
 }
 :root[data-motion="reduced"] .callout.show { animation-duration: var(--dur, 1.1s) !important; }
 :root[data-motion="reduced"] .scope .sweep, :root[data-motion="reduced"] .grid .sweep, :root[data-motion="reduced"] .scope .blip { display: none; }
+
+/* ───────── Two-device play ───────── */
+.menu-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.menu-pair .btn.stack { font-size: 21px; padding-inline: 10px; }
+
+.net-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  font: 12px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  white-space: nowrap;
+}
+#place-net { margin-left: auto; }
+.net-chip span { overflow: hidden; text-overflow: ellipsis; }
+.net-chip i { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
+.net-chip[data-s="connected"] i { background: var(--accent); animation: none; box-shadow: 0 0 10px var(--accent); }
+.net-chip[data-s="offline"] i, .net-chip[data-s="unsupported"] i, .net-chip[data-s="left"] i { background: var(--red); animation: none; }
+.net-chip b { color: var(--ink); font-weight: 700; letter-spacing: 0.16em; }
+@media (max-width: 720px) { .net-chip .long { display: none; } }
+
+.room-code {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px 0 14px;
+}
+.room-code b {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 84px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font: 700 54px/1 var(--font-display);
+  color: var(--ink);
+  padding-top: 8px;
+}
+.code-input {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  margin: 10px 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 700 46px/1 var(--font-display);
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 10px 0 2px;
+  -webkit-user-select: text;
+  user-select: text;
+  outline: none;
+}
+.code-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.choice { display: grid; gap: 10px; }
+.choice .btn.stack { min-height: 72px; }
+.wait-line { display: flex; align-items: center; gap: 12px; margin-top: 14px; color: var(--dim); font-size: 14px; }
+.wait-line i { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
+.result-card .offer { margin: -4px 0 12px; color: var(--accent); font-weight: 600; }
+
+/* In battle the chip is a status light, not a sentence; give the turn pill the room. */
+#battle-net .long { display: none; }
+#battle-net { padding: 0 12px; }
+@media (max-width: 900px) {
+  #battle .hud:has(#battle-net:not([hidden])) .readout span:nth-child(2) { display: none; }
+  #battle-net span { max-width: 15ch; }
+}
+@media (max-width: 620px) { #battle-net span { display: none; } }
