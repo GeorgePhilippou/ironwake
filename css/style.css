@@ -145,7 +145,7 @@ h1, h2, h3, p { margin: 0; }
     max(16px, env(safe-area-inset-left));
   animation: screen-in 0.35s ease both;
 }
-@keyframes screen-in { from { opacity: 0; transform: scale(0.985); } }
+@keyframes screen-in { from { opacity: 0; } } /* fade only: a zoom read as the screen shaking */
 
 .display, .wordmark, .eyebrow, .btn, h2, .turn strong, .callout, .stat b, .big {
   font-family: var(--font-display);
@@ -705,7 +705,7 @@ button.turn { text-align: left; }
 .callout.miss { color: var(--miss); }
 .callout.info { color: var(--accent); }
 @keyframes callout {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.12); }
   14% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -62%) scale(0.98); }
@@ -906,7 +906,8 @@ table.rec th:first-child, table.rec td:first-child { text-align: left; font: 700
 #toast.action { pointer-events: auto; cursor: pointer; border-color: var(--accent); }
 
 /* hidden iOS haptic switch */
-.hx { position: fixed; left: -100px; top: 0; opacity: 0; pointer-events: none; }
+.hx { position: fixed; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.hx input { margin: 0; width: 1px; height: 1px; }
 
 /* ───────── Reduced motion ───────── */
 :root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after {
@@ -1357,3 +1358,43 @@ table.rec th:first-child, table.rec td:first-child { text-align: left; font: 700
 
 [data-skin="history"] .place-actions .btn:not(.primary) { font-size: 15px; letter-spacing: 0.02em; }
 .callout { max-width: calc(100vw - 32px); white-space: normal; text-align: center; text-wrap: balance; }
+
+/* ── Key to the marks, under the fleet panel ── */
+.key { flex: none; display: flex; gap: 14px; align-items: center; margin-top: 6px; font: 12px var(--font-mono); color: var(--dim); letter-spacing: 0.04em; }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.key .cell { position: relative; display: inline-block; width: 20px; height: 20px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--grid-line); background-color: var(--water); }
+[data-skin="history"] .key .cell { background-color: var(--chart); }
+.key .cell.hit::after { display: none; }
+@container (max-height: 470px) { .key { display: none; } }
+
+/* ── Miss marks per battle ── */
+/* 1805: where round shot fell, a ring of white water */
+[data-skin="history"][data-era="1805"] .cell.miss::after {
+  inset: 26%;
+  background: radial-gradient(circle, rgba(255, 250, 235, 0.9) 0 18%, transparent 22%);
+  border: 2px solid var(--miss);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 250, 235, 0.18);
+  opacity: 0.95;
+}
+[data-skin="history"][data-era="1805"] .board.mini .cell.miss::after { inset: 24%; border-width: 1.5px; box-shadow: none; }
+/* 1982: a cross on the plot, like a grease-pencil mark on a radar display */
+[data-skin="history"][data-era="1982"] .cell.miss::after {
+  inset: 30%;
+  border-radius: 0;
+  background:
+    linear-gradient(45deg, transparent 43%, var(--accent) 43% 57%, transparent 57%),
+    linear-gradient(-45deg, transparent 43%, var(--accent) 43% 57%, transparent 57%);
+  box-shadow: none;
+  opacity: 0.9;
+}
+[data-skin="history"][data-era="1982"] .board.mini .cell.miss::after { inset: 26%; }
+
+/* ── Fleet panel headers: one line, the name gives way first ── */
+.panel h2 { white-space: nowrap; min-width: 0; }
+.panel h2 > span:not(.ensign) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.panel h2 em { flex: none; white-space: nowrap; }
+[data-skin="history"] .panel h2 { font-size: 14px; letter-spacing: 0.1em; }
+[data-skin="history"] .panel h2 em { font-size: 11px; letter-spacing: 0.04em; }
+@container (max-width: 300px) { .panel h2 em .long { display: none; } }
+.own-panel { container-type: inline-size; }

@@ -175,7 +175,10 @@ function haptic(kind) {
       if (!navigator.userActivation || navigator.userActivation.hasBeenActive) navigator.vibrate(HAPTIC[kind] || 10);
     }
     // iOS has no vibrate(); toggling a native switch gives a system tick, but only inside a tap.
-    else if (GESTURE_HAPTICS.has(kind)) $('hx-label').click();
+    else if (GESTURE_HAPTICS.has(kind)) {
+      $('hx-label').click();
+      $('hx-switch').blur(); // never leave focus on it: Safari may scroll to a focused control
+    }
   } catch { /* unsupported */ }
 }
 
@@ -643,8 +646,8 @@ function paintBattle({ fresh = -1, freshShip = null, freshOn = null } = {}) {
   });
   $('enemy-fleet').innerHTML = fleetRows(theirs, freshOn === 'target' ? freshShip : null);
   const theirAfloat = online() && viewer === 0 ? FLEET.length - theirs.ships.filter((s) => isSunk(theirs, s)).length : afloat(theirs).length;
-  $('enemy-count').textContent = `${theirAfloat} / ${FLEET.length} afloat`;
-  $('own-count').textContent = `${afloat(mine).length} / ${FLEET.length} afloat`;
+  $('enemy-count').innerHTML = `${theirAfloat} / ${FLEET.length}<span class="long"> afloat</span>`;
+  $('own-count').innerHTML = `${afloat(mine).length} / ${FLEET.length}<span class="long"> afloat</span>`;
   const st = playerStats(game, viewer);
   $('ro-shots').textContent = st.shots;
   $('ro-acc').textContent = st.shots ? pct(st.accuracy) : '–';

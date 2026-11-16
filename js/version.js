@@ -1,2 +1,2 @@
 // Written by tools/stamp.mjs — do not edit.
-export const VERSION = '1.4.0-24d03c70';
+export const VERSION = '1.4.1-822ce8e1';
