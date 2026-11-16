@@ -998,3 +998,362 @@ table.rec th:first-child, table.rec td:first-child { text-align: left; font: 700
   #battle-net span { max-width: 15ch; }
 }
 @media (max-width: 620px) { #battle-net span { display: none; } }
+
+/* ═════════════════ Royal Navy, 1939–45 ═════════════════
+   An Admiralty operations room. Night: blacked-out plot room under brass
+   lamps. Day: the chart table. Everything below only applies with
+   data-skin="history"; the sonar look above is untouched. */
+
+:root[data-skin="history"] {
+  color-scheme: dark;
+  --bg: #0a1424;
+  --bg-2: #15253c;
+  --panel: rgba(18, 31, 51, 0.88);
+  --panel-solid: #132238;
+  --line: rgba(212, 177, 108, 0.24);
+  --line-strong: rgba(212, 177, 108, 0.55);
+  --grid-line: rgba(150, 182, 214, 0.26);
+  --water: rgba(120, 160, 205, 0.05);
+  --ink: #f2ead6;
+  --dim: #bfb18f;
+  --faint: #857c66;
+  --accent: #d4b16c;
+  --accent-ink: #1b1308;
+  --accent-soft: rgba(212, 177, 108, 0.15);
+  --amber: #f0cf7a;
+  --red: #e0473b;
+  --red-soft: rgba(224, 71, 59, 0.2);
+  --miss: #f2ead6;
+  --glow: 0 0 20px rgba(212, 177, 108, 0.22);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  --chart: #1a2c45;
+  --chart-ink: rgba(150, 182, 214, 0.5);
+  --rn-hull: #8e9aa3;
+  --rn-edge: #1b2631;
+  --rn-cam1: #c9d6dc;
+  --rn-cam2: #50657a;
+  --rn-deck: #5c676f;
+  --rn-wood: #b59060;
+  --rn-dark: #36424b;
+  --rn-gun: #222b31;
+  --rn-bridge: #dfe4e2;
+  --font-display: "Baskerville", "Iowan Old Style", "Palatino", "Book Antiqua", Georgia, serif;
+  --font-ui: "Iowan Old Style", "Palatino", Georgia, serif;
+  --font-mono: "American Typewriter", "Courier New", Courier, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-skin="history"]:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #ddd0ae;
+    --bg-2: #efe5c8;
+    --panel: rgba(248, 241, 222, 0.92);
+    --panel-solid: #f8f1de;
+    --line: rgba(14, 38, 72, 0.2);
+    --line-strong: rgba(14, 38, 72, 0.5);
+    --grid-line: rgba(34, 84, 140, 0.28);
+    --water: rgba(34, 84, 140, 0.04);
+    --ink: #0f213b;
+    --dim: #4c5a6d;
+    --faint: #8c8a7c;
+    --accent: #0f2a52;
+    --accent-ink: #f6efdb;
+    --accent-soft: rgba(15, 42, 82, 0.1);
+    --amber: #9a6a12;
+    --red: #b5261c;
+    --red-soft: rgba(181, 38, 28, 0.15);
+    --miss: #ffffff;
+    --glow: 0 0 0 rgba(0, 0, 0, 0);
+    --shadow: 0 16px 40px rgba(60, 46, 20, 0.25);
+    --chart: #f1e7c9;
+    --chart-ink: rgba(34, 84, 140, 0.45);
+  }
+}
+:root[data-skin="history"][data-theme="light"] {
+  color-scheme: light;
+  --bg: #ddd0ae;
+  --bg-2: #efe5c8;
+  --panel: rgba(248, 241, 222, 0.92);
+  --panel-solid: #f8f1de;
+  --line: rgba(14, 38, 72, 0.2);
+  --line-strong: rgba(14, 38, 72, 0.5);
+  --grid-line: rgba(34, 84, 140, 0.28);
+  --water: rgba(34, 84, 140, 0.04);
+  --ink: #0f213b;
+  --dim: #4c5a6d;
+  --faint: #8c8a7c;
+  --accent: #0f2a52;
+  --accent-ink: #f6efdb;
+  --accent-soft: rgba(15, 42, 82, 0.1);
+  --amber: #9a6a12;
+  --red: #b5261c;
+  --red-soft: rgba(181, 38, 28, 0.15);
+  --miss: #ffffff;
+  --glow: 0 0 0 rgba(0, 0, 0, 0);
+  --shadow: 0 16px 40px rgba(60, 46, 20, 0.25);
+  --chart: #f1e7c9;
+  --chart-ink: rgba(34, 84, 140, 0.45);
+}
+
+/* No sonar scanlines: a soft lamp-lit vignette instead. */
+[data-skin="history"] #app::after { background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0, 0, 0, 0.28)); }
+[data-skin="history"] .scope, [data-skin="history"] .grid .sweep { display: none; }
+.title-flag, .skin-btn .mini-flag, .ensign:empty, .result-flag:empty { display: none; }
+
+/* Quick theme switch on the title screen */
+.skin-btn {
+  position: absolute;
+  z-index: 2;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  width: 56px;
+}
+.skin-btn svg { width: 30px; height: 22px; }
+.skin-btn .mini-flag { display: block; width: 34px; height: 17px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); }
+
+/* ── Title: a massive Union Flag ── */
+[data-skin="history"] .title-flag {
+  display: block;
+  position: absolute;
+  inset: -4%;
+  overflow: hidden;
+  animation: flag-drift 14s ease-in-out infinite alternate;
+}
+.title-flag .flag-svg { width: 100%; height: 100%; display: block; }
+.title-flag::before { /* cloth sheen, as if the flag is moving in the wind */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(100deg, rgba(255, 255, 255, 0) 0 14%, rgba(255, 255, 255, 0.13) 20%, rgba(0, 0, 0, 0.12) 27%, rgba(255, 255, 255, 0) 33%);
+  background-size: 160% 100%;
+  animation: flag-wave 7s linear infinite;
+  mix-blend-mode: soft-light;
+}
+.title-flag::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(70% 60% at 50% 52%, rgba(5, 12, 24, 0.15), rgba(5, 12, 24, 0.55));
+}
+@keyframes flag-wave { to { background-position: -160% 0; } }
+@keyframes flag-drift { from { transform: scale(1.02) translateX(-0.6%); } to { transform: scale(1.06) translateX(0.6%); } }
+
+[data-skin="history"] .title-card {
+  padding: clamp(18px, 3.4vh, 30px) clamp(18px, 3vw, 30px) clamp(16px, 3vh, 26px);
+  background: var(--panel-solid);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 4px var(--panel-solid), inset 0 0 0 5px var(--line-strong), var(--shadow);
+}
+[data-skin="history"] .emblem { color: var(--accent); filter: none; width: clamp(70px, 12vh, 104px); }
+[data-skin="history"] .wordmark {
+  font-weight: 700;
+  font-size: clamp(42px, min(8vh, 9.4vw), 68px);
+  letter-spacing: 0.1em;
+  margin-right: -0.1em;
+  text-shadow: none;
+  padding-top: 0.08em;
+}
+[data-skin="history"] .tagline { font-family: var(--font-mono); letter-spacing: 0.24em; color: var(--red); font-weight: 700; }
+[data-skin="history"] .menu { margin-top: clamp(16px, 3.4vh, 30px); }
+[data-skin="history"] .menu-row .btn { font-size: 15px; letter-spacing: 0.06em; }
+[data-skin="history"] .title-card { width: min(470px, 100%); }
+[data-skin="history"] .foot { color: rgba(255, 255, 255, 0.65); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+
+/* Buttons: brass-edged; the main one is navy (day) or brass (night). */
+[data-skin="history"] .btn { border-radius: 4px; letter-spacing: 0.12em; font-weight: 700; }
+[data-skin="history"] .btn small { font-family: var(--font-ui); font-style: italic; letter-spacing: 0; }
+[data-skin="history"] .btn.primary { box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 3px var(--accent-ink), var(--glow); }
+[data-skin="history"] .icon-btn, [data-skin="history"] .turn, [data-skin="history"] .net-chip, [data-skin="history"] .panel, [data-skin="history"] .card { border-radius: 6px; }
+[data-skin="history"] .seg, [data-skin="history"] .seg button { border-radius: 4px; }
+
+/* ── HUD and panels ── */
+[data-skin="history"] .hud-title strong, [data-skin="history"] .turn strong { letter-spacing: 0.08em; }
+[data-skin="history"] .turn #turn-sub, [data-skin="history"] .turn span span { font-style: italic; }
+[data-skin="history"] .panel h2 { color: var(--ink); align-items: center; justify-content: flex-start; gap: 10px; }
+[data-skin="history"] .panel h2 em { margin-left: auto; font-family: var(--font-mono); color: var(--dim); }
+[data-skin="history"] .ensign { display: inline-block; flex: none; width: 34px; height: 17px; margin-top: -3px; }
+[data-skin="history"] .ensign svg { display: block; width: 100%; height: 100%; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+[data-skin="history"] .fleet-row .nm, [data-skin="history"] .tray-item .nm { letter-spacing: 0.06em; }
+[data-skin="history"] .fleet-row .st, [data-skin="history"] .ticker, [data-skin="history"] .readout { font-family: var(--font-mono); }
+
+/* ── The plotting table: chart paper, a compass rose, brass rail ── */
+[data-skin="history"] .grid {
+  border-radius: 3px;
+  background:
+    linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 10% 10%,
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 10% 10%,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none' stroke='%23246' stroke-opacity='.22'%3E%3Ccircle cx='100' cy='100' r='70'/%3E%3Ccircle cx='100' cy='100' r='56' stroke-dasharray='2 4'/%3E%3Cpath d='M100 14l9 86-9 86-9-86zM14 100l86-9 86 9-86 9z' fill='%23246' fill-opacity='.12'/%3E%3Cpath d='M39 39l61 61 61 61M161 39l-61 61-61 61' stroke-opacity='.14'/%3E%3C/svg%3E") 50% 50% / 62% no-repeat,
+    var(--chart);
+  box-shadow: inset 0 0 0 1px var(--line-strong), 0 0 0 4px var(--panel-solid), 0 0 0 5px var(--accent);
+}
+[data-skin="history"] .board.mini .grid { box-shadow: inset 0 0 0 1px var(--line-strong); }
+[data-skin="history"] .board.live .grid { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 4px var(--panel-solid), 0 0 0 5px var(--accent), var(--glow); }
+[data-skin="history"] .board.under-fire .grid { box-shadow: inset 0 0 0 2px var(--red), 0 0 0 4px var(--panel-solid), 0 0 0 5px var(--red); }
+[data-skin="history"] .labels { font-family: var(--font-mono); color: var(--dim); font-weight: 700; }
+
+/* Miss: a white plotting pin. Hit: a red pin under the fire. */
+[data-skin="history"] .cell.miss::after {
+  inset: 34%;
+  background: radial-gradient(circle at 35% 32%, #fff 0 30%, #ddd6c6 75%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(15, 33, 59, 0.35);
+  opacity: 1;
+}
+[data-skin="history"] .cell.hit { background: radial-gradient(circle, rgba(181, 38, 28, 0.22) 0 45%, rgba(181, 38, 28, 0.1) 70%); }
+[data-skin="history"] .board.live .cell:not(.miss):not(.hit):hover::after { background:
+  linear-gradient(var(--red), var(--red)) 50% 0 / 1.5px 100% no-repeat,
+  linear-gradient(var(--red), var(--red)) 0 50% / 100% 1.5px no-repeat; }
+
+/* Ships of the period */
+.ship .rn .hull { fill: var(--rn-hull); stroke: var(--rn-edge); stroke-width: 3; }
+.ship .rn .cam1 { fill: var(--rn-cam1); }
+.ship .rn .cam2 { fill: var(--rn-cam2); }
+.ship .rn .deck { fill: var(--rn-deck); }
+.ship .rn .wood { fill: var(--rn-wood); }
+.ship .rn .dark { fill: var(--rn-dark); }
+.ship .rn .gun, .ship .rn .funnel { fill: var(--rn-gun); }
+.ship .rn .bridge { fill: var(--rn-bridge); }
+.ship .rn .lift { fill: #7b868e; }
+.ship .rn .mark { stroke: #f4efdf; opacity: 0.85; }
+.ship .rn .plane { fill: none; stroke: #ece3c6; stroke-width: 3.5; stroke-linecap: round; }
+.ship.wreck .rn .hull { fill: #5b1f1a; stroke: var(--red); }
+.ship.wreck .rn .cam1, .ship.wreck .rn .bridge, .ship.wreck .rn .wood { fill: #6e2a22; }
+.ship.wreck .rn .cam2, .ship.wreck .rn .deck, .ship.wreck .rn .dark, .ship.wreck .rn .gun, .ship.wreck .rn .funnel, .ship.wreck .rn .lift { fill: #2a0e0c; }
+.ship.wreck .rn .plane, .ship.wreck .rn .mark { stroke: #b0473b; }
+.ship.revealed .rn .hull { fill: transparent; stroke: var(--amber); stroke-dasharray: 9 7; }
+.ship.revealed .rn > :not(.hull) { opacity: 0.25; }
+
+/* ── Callouts: signal flags and telegraph ── */
+[data-skin="history"] .callout { border-radius: 4px; border-style: double; border-width: 4px; letter-spacing: 0.1em; }
+
+/* ── Handover: a MOST SECRET dispatch ── */
+[data-skin="history"] #cover {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 31px, var(--accent-soft) 31px 32px),
+    radial-gradient(100% 80% at 50% 30%, var(--bg-2), var(--bg));
+  background-color: var(--bg);
+}
+[data-skin="history"] .cover-card {
+  padding: 28px 26px 26px;
+  background: var(--panel-solid);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 4px var(--panel-solid), inset 0 0 0 5px var(--line-strong), var(--shadow);
+}
+[data-skin="history"] .cover-card .eyebrow { color: var(--red); font-weight: 700; }
+[data-skin="history"] .cover-card .last-shot { font-family: var(--font-mono); border-radius: 3px; }
+
+/* ── Result: the flag above the signal ── */
+[data-skin="history"] .result-flag { display: flex; justify-content: center; padding-top: 22px; }
+[data-skin="history"] .result-flag svg { display: block; width: 132px; height: 66px; border-radius: 2px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.2); }
+[data-skin="history"] .result-card .card-body { padding-top: 14px; }
+[data-skin="history"] .result-card[data-outcome="lose"] .result-flag { filter: grayscale(0.85) brightness(0.7); }
+[data-skin="history"] .result-card .verdict { letter-spacing: 0.04em; margin-right: -0.04em; font-size: clamp(30px, 5.4vmin, 46px); line-height: 1.05; text-wrap: balance; }
+[data-skin="history"] .result-card[data-outcome="win"] .verdict { color: var(--ink); }
+[data-skin="history"] .stat b { font-family: var(--font-display); }
+[data-skin="history"] .stat span, [data-skin="history"] table.rec th, [data-skin="history"] .meta { font-family: var(--font-mono); }
+
+:root[data-motion="reduced"][data-skin="history"] .title-flag, :root[data-motion="reduced"] .title-flag::before { animation: none !important; }
+[data-skin="history"] .tray-item { --u: 21px; gap: 10px; }
+[data-skin="history"] .tray-item .nm { font-size: 15px; letter-spacing: 0.02em; text-transform: none; font-weight: 700; }
+[data-skin="history"] .tray-item .ln { font-size: 10px; }
+[data-skin="history"] .fleet-row .nm { text-transform: none; letter-spacing: 0.02em; font-size: 15px; }
+[data-skin="history"] .place-actions .btn:not(.primary) { font-size: 16px; letter-spacing: 0.04em; }
+@container (max-width: 330px) { [data-skin="history"] .tray-item { --u: 17px; } [data-skin="history"] .tray-item .nm { font-size: 14px; } }
+[data-skin="history"] .callout.miss { color: var(--accent); }
+[data-skin="history"] .cover-card .big { font-size: clamp(40px, 7.5vmin, 60px); letter-spacing: 0.08em; white-space: nowrap; }
+
+/* ═════════════════ Battles: per-era looks ═════════════════ */
+/* 1805 — a captain's great cabin by candlelight; by day, a parchment chart. */
+:root[data-skin="history"][data-era="1805"] {
+  --bg: #170f08; --bg-2: #2a1c10; --panel: rgba(42, 29, 17, 0.9); --panel-solid: #2c1e12;
+  --line: rgba(217, 168, 82, 0.24); --line-strong: rgba(217, 168, 82, 0.55); --grid-line: rgba(220, 192, 140, 0.22);
+  --ink: #f2e5c6; --dim: #c6aa7a; --faint: #8b7351; --accent: #d9a441; --accent-ink: #1d1208; --accent-soft: rgba(217, 164, 65, 0.15);
+  --amber: #efc56a; --red: #d0452f; --red-soft: rgba(208, 69, 47, 0.2); --miss: #f2e5c6; --chart: #2d2115; --chart-ink: rgba(220, 192, 140, 0.45);
+  --font-display: "Big Caslon", "Baskerville", "Book Antiqua", Georgia, serif;
+  --font-ui: "Baskerville", "Iowan Old Style", Georgia, serif;
+  --font-mono: "Big Caslon", "Baskerville", Georgia, serif;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-skin="history"][data-era="1805"]:not([data-theme="dark"]) {
+    --bg: #d8c193; --bg-2: #ecdbb5; --panel: rgba(247, 237, 211, 0.94); --panel-solid: #f7edd3;
+    --line: rgba(92, 58, 26, 0.22); --line-strong: rgba(92, 58, 26, 0.5); --grid-line: rgba(92, 58, 26, 0.28);
+    --ink: #2a1b0e; --dim: #6c5435; --faint: #9a8562; --accent: #7a1f12; --accent-ink: #f7edd3; --accent-soft: rgba(122, 31, 18, 0.1);
+    --amber: #8a5a10; --red: #9d2414; --red-soft: rgba(157, 36, 20, 0.15); --miss: #fffaf0; --chart: #efdfbb; --chart-ink: rgba(92, 58, 26, 0.45);
+  }
+}
+:root[data-skin="history"][data-era="1805"][data-theme="light"] {
+  --bg: #d8c193; --bg-2: #ecdbb5; --panel: rgba(247, 237, 211, 0.94); --panel-solid: #f7edd3;
+  --line: rgba(92, 58, 26, 0.22); --line-strong: rgba(92, 58, 26, 0.5); --grid-line: rgba(92, 58, 26, 0.28);
+  --ink: #2a1b0e; --dim: #6c5435; --faint: #9a8562; --accent: #7a1f12; --accent-ink: #f7edd3; --accent-soft: rgba(122, 31, 18, 0.1);
+  --amber: #8a5a10; --red: #9d2414; --red-soft: rgba(157, 36, 20, 0.15); --miss: #fffaf0; --chart: #efdfbb; --chart-ink: rgba(92, 58, 26, 0.45);
+}
+[data-skin="history"][data-era="1805"] .tagline, [data-skin="history"][data-era="1805"] .turn #turn-sub { font-style: italic; letter-spacing: 0.08em; }
+[data-skin="history"][data-era="1805"] .labels { font-style: italic; }
+
+/* 1982 — a Cold War operations room: green-grey consoles and amber lamps. */
+:root[data-skin="history"][data-era="1982"] {
+  --bg: #0c1210; --bg-2: #17201c; --panel: rgba(22, 31, 27, 0.92); --panel-solid: #18221e;
+  --line: rgba(150, 190, 160, 0.2); --line-strong: rgba(150, 190, 160, 0.45); --grid-line: rgba(120, 200, 150, 0.22);
+  --ink: #e3ece5; --dim: #9fb2a6; --faint: #66786d; --accent: #f0a640; --accent-ink: #1a1004; --accent-soft: rgba(240, 166, 64, 0.14);
+  --amber: #f6c25e; --red: #e5523f; --red-soft: rgba(229, 82, 63, 0.2); --miss: #e3ece5; --chart: #13201a; --chart-ink: rgba(120, 200, 150, 0.4);
+  --font-display: "DIN Condensed", "Avenir Next Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --font-ui: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "Courier New", Courier, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-skin="history"][data-era="1982"]:not([data-theme="dark"]) {
+    --bg: #d3d8d5; --bg-2: #e8ebe9; --panel: rgba(246, 248, 247, 0.95); --panel-solid: #f6f8f7;
+    --line: rgba(29, 59, 92, 0.2); --line-strong: rgba(29, 59, 92, 0.45); --grid-line: rgba(29, 59, 92, 0.25);
+    --ink: #17211d; --dim: #55635c; --faint: #8b9690; --accent: #1d3b5c; --accent-ink: #f4f7f6; --accent-soft: rgba(29, 59, 92, 0.1);
+    --amber: #9a6410; --red: #b8301f; --red-soft: rgba(184, 48, 31, 0.14); --miss: #ffffff; --chart: #eef1ef; --chart-ink: rgba(29, 59, 92, 0.4);
+  }
+}
+:root[data-skin="history"][data-era="1982"][data-theme="light"] {
+  --bg: #d3d8d5; --bg-2: #e8ebe9; --panel: rgba(246, 248, 247, 0.95); --panel-solid: #f6f8f7;
+  --line: rgba(29, 59, 92, 0.2); --line-strong: rgba(29, 59, 92, 0.45); --grid-line: rgba(29, 59, 92, 0.25);
+  --ink: #17211d; --dim: #55635c; --faint: #8b9690; --accent: #1d3b5c; --accent-ink: #f4f7f6; --accent-soft: rgba(29, 59, 92, 0.1);
+  --amber: #9a6410; --red: #b8301f; --red-soft: rgba(184, 48, 31, 0.14); --miss: #ffffff; --chart: #eef1ef; --chart-ink: rgba(29, 59, 92, 0.4);
+}
+[data-skin="history"][data-era="1982"] .wordmark { letter-spacing: 0.18em; margin-right: -0.18em; }
+[data-skin="history"][data-era="1982"] .btn, [data-skin="history"][data-era="1982"] .panel h2 { letter-spacing: 0.14em; }
+
+/* Each navy's ships */
+.ship g.gb1805, .ship g.fr1805 { --rn-hull: #221b15; --rn-edge: #0f0b08; --rn-wood: #c49b63; --rn-dark: #4b3624; }
+.ship g.gb1805 { --band: #d4a23a; }  /* "Nelson chequer": ochre bands on black */
+.ship g.fr1805 { --band: #9b2d21; }  /* red-ochre bands on black */
+.ship .rn .band { fill: var(--band, transparent); }
+.ship .rn .sail, .ship .rn .jib { fill: #f3ead3; stroke: #b8aa86; stroke-width: 1.5; }
+.ship .rn .yard, .ship .rn .bowsprit { stroke: #3b2a19; stroke-width: 3; fill: none; stroke-linecap: round; }
+.ship .rn .mast { fill: #5a3e22; }
+.ship .rn .seams { stroke: #8a6a3e; stroke-width: 1.5; opacity: 0.55; }
+.ship g.de1940 { --rn-hull: #a7adb1; --rn-cam1: #f2f2ee; --rn-cam2: #1b1e21; --rn-deck: #6b7378; --rn-wood: #b39164; --rn-dark: #4c5459; }
+.ship g.gb1982 { --rn-hull: #a8b0b4; --rn-deck: #4b5257; --rn-dark: #6b7479; --rn-bridge: #e9eded; }
+.ship g.ar1982 { --rn-hull: #939ea3; --rn-deck: #4f585d; --rn-dark: #687277; --rn-bridge: #e4e8e8; }
+.ship .rn .ramp { fill: #727b80; }
+.ship.wreck .rn .sail, .ship.wreck .rn .jib { fill: #6e2a22; stroke: #3a120e; }
+.ship.wreck .rn .band, .ship.wreck .rn .ramp { fill: #3a120e; }
+.ship.wreck .rn .yard, .ship.wreck .rn .bowsprit, .ship.wreck .rn .seams { stroke: #b0473b; }
+
+/* Flags beside fleet names, on the handover and the result */
+[data-skin="history"] .ensign svg { object-fit: cover; }
+.cover-flag:empty, .cover-navy:empty { display: none; }
+[data-skin="history"] .cover-flag svg { display: block; width: 120px; height: 72px; margin: 4px auto 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); border-radius: 2px; }
+[data-skin="history"] .cover-navy { font: 700 16px var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+
+/* Battle and side pickers */
+.eras { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.era-card, .side-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+  min-height: 64px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel);
+}
+.era-card b, .side-card b { font: 700 17px/1.1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; }
+.era-card .yr { font: 12px var(--font-mono); color: var(--accent); }
+.era-card .bl { font-size: 12.5px; line-height: 1.3; color: var(--dim); }
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.side-card { flex-direction: row; align-items: center; gap: 12px; }
+.side-card .sf svg { display: block; width: 54px; height: 32px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2); }
+.era-card[aria-pressed="true"], .side-card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+@media (max-width: 560px) { .eras { grid-template-columns: 1fr; } .era-card .bl { display: none; } }
+
+[data-skin="history"] .place-actions .btn:not(.primary) { font-size: 15px; letter-spacing: 0.02em; }
+.callout { max-width: calc(100vw - 32px); white-space: normal; text-align: center; text-wrap: balance; }

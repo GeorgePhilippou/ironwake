@@ -6,11 +6,20 @@ import {
   createBoard, isFleetComplete, randomFleet, fire, countShots, isSunk, inBounds, validatePlacement,
 } from './engine.js';
 import { LEVELS } from './ai.js';
+import { validEra, validSide, otherSide } from './skins.js';
+
+/** Historical battle and who commands which side: sides[p] is player p's navy. */
+export function battleSides(era, side) {
+  const e = validEra(era);
+  const mine = validSide(e, side);
+  return { era: e, sides: [mine, otherSide(e, mine)] };
+}
 
 export const SAVE_VERSION = 1;
 
-export function newGame({ mode = 'solo', difficulty = 'normal', hitAndGoAgain = false, keepShipsApart = false } = {}) {
+export function newGame({ mode = 'solo', difficulty = 'normal', hitAndGoAgain = false, keepShipsApart = false, era = '1940', side = 'gb' } = {}) {
   return {
+    ...battleSides(era, side),
     v: SAVE_VERSION,
     id: Math.random().toString(36).slice(2, 10),
     mode: mode === 'duo' ? 'duo' : 'solo',
@@ -109,6 +118,7 @@ export function reviveGame(raw) {
     if (!['placement', 'battle', 'over'].includes(g.phase)) return null;
     if (![0, 1].includes(g.turn) || ![0, 1].includes(g.placing)) return null;
     if (!Array.isArray(g.boards) || g.boards.length !== 2) return null;
+    { const b = battleSides(g.era, Array.isArray(g.sides) ? g.sides[0] : 'gb'); g.era = b.era; g.sides = b.sides; }
     for (const rule of ['hitAndGoAgain', 'keepShipsApart']) {
       if (g[rule] !== undefined && typeof g[rule] !== 'boolean') return null;
       g[rule] ??= false;

@@ -43,6 +43,7 @@
   try {
     var s = JSON.parse(localStorage.getItem('ironwake.settings.v1')) || {};
     if (s.theme === 'dark' || s.theme === 'light') document.documentElement.dataset.theme = s.theme;
+    document.documentElement.dataset.skin = s.skin === 'rn' || s.skin === 'history' ? 'history' : 'sonar';
   } catch (e) {}
 </script>
 </head>
@@ -52,6 +53,8 @@
 <main id="app">
   <!-- Title -->
   <section id="title" class="screen title">
+    <div class="title-flag" id="title-flag" aria-hidden="true"></div>
+    <button class="icon-btn skin-btn" id="btn-skin" type="button"></button>
     <div class="scope" aria-hidden="true">
       <i class="ring r1"></i><i class="ring r2"></i><i class="ring r3"></i><i class="axis"></i>
       <i class="sweep"></i><i class="blip b1"></i><i class="blip b2"></i><i class="blip b3"></i>
@@ -59,7 +62,7 @@
     <div class="title-card">
       <div class="emblem" data-emblem></div>
       <h1 class="wordmark">Ironwake</h1>
-      <p class="tagline">Find the fleet · Sink the fleet</p>
+      <p class="tagline" id="tagline">Find the fleet · Sink the fleet</p>
       <nav class="menu" aria-label="Main menu">
         <button class="btn primary stack" id="btn-resume" hidden>Resume battle<small id="resume-detail"></small></button>
         <button class="btn primary stack" id="btn-solo">Solo mission<small>Take on the computer</small></button>
@@ -123,11 +126,11 @@
       <div class="board" id="target-board" aria-label="Enemy waters"></div>
       <aside class="side">
         <div class="panel own-panel">
-          <h2><span id="own-title">Your fleet</span> <em id="own-count"></em></h2>
+          <h2><span class="ensign" id="own-ensign"></span><span id="own-title">Your fleet</span> <em id="own-count"></em></h2>
           <div class="mini-wrap"><div class="board mini" id="own-board" aria-label="Your fleet"></div></div>
         </div>
         <div class="panel fleet-panel">
-          <h2><span id="enemy-title">Enemy fleet</span> <em id="enemy-count"></em></h2>
+          <h2><span class="ensign" id="enemy-ensign"></span><span id="enemy-title">Enemy fleet</span> <em id="enemy-count"></em></h2>
           <div class="fleet-list" id="enemy-fleet"></div>
           <div class="ticker" id="ticker" aria-live="polite"></div>
         </div>
@@ -141,7 +144,9 @@
   <div class="cover-card" id="cover-card">
     <div class="emblem" data-emblem></div>
     <span class="eyebrow" id="cover-eyebrow">Pass the device to</span>
+    <div class="cover-flag" id="cover-flag"></div>
     <div class="big who" id="cover-who">Player 2</div>
+    <div class="cover-navy" id="cover-navy"></div>
     <p id="cover-text"></p>
     <div class="last-shot" id="cover-last" hidden></div>
     <button class="btn primary" id="cover-ready" disabled>Ready</button>
@@ -151,6 +156,7 @@
 <!-- Win / lose -->
 <div class="overlay scrim" id="result" hidden>
   <div class="card result-card" id="result-card" role="dialog" aria-modal="true" aria-labelledby="verdict">
+    <div class="result-flag" id="result-flag"></div>
     <div class="card-body scroll">
       <div class="verdict" id="verdict"></div>
       <p class="sub" id="result-sub"></p>

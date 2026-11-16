@@ -6,7 +6,7 @@
 // fresh copy into its own cache, takes over, and the page reloads itself.
 // A copy is therefore always all-old or all-new, never a mixture.
 
-const VERSION = '1.3.0-4da10b9b';
+const VERSION = '1.4.0-24d03c70';
 const ASSETS = [
   './',
   'index.html',
@@ -21,6 +21,7 @@ const ASSETS = [
   'js/game.js',
   'js/net.js',
   'js/online.js',
+  'js/skins.js',
   'js/storage.js',
   'js/version.js',
   'vendor/peerjs.min.js',

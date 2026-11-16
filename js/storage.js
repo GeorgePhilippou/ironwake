@@ -20,6 +20,9 @@ export const DEFAULT_SETTINGS = {
   reducedMotion: null, // null = follow the system setting
   difficulty: 'normal',
   theme: 'auto', // auto | dark | light
+  skin: 'sonar', // sonar | history (real battles)
+  era: '1940', // 1805 | 1940 | 1982
+  side: 'gb', // the navy you last chose for that battle
 };
 
 export function loadSettings() {
@@ -30,6 +33,10 @@ export function loadSettings() {
   if (typeof raw.reducedMotion === 'boolean') s.reducedMotion = raw.reducedMotion;
   if (LEVELS.includes(raw.difficulty)) s.difficulty = raw.difficulty;
   if (['auto', 'dark', 'light'].includes(raw.theme)) s.theme = raw.theme;
+  if (raw.skin === 'rn' || raw.skin === 'history') s.skin = 'history';
+  if (['1805', '1940', '1982'].includes(raw.era)) s.era = raw.era;
+  const sides = { 1805: ['gb', 'fr'], 1940: ['gb', 'de'], 1982: ['gb', 'ar'] }[s.era];
+  s.side = sides.includes(raw.side) ? raw.side : 'gb';
   return s;
 }
 export const saveSettings = (s) => write(KEYS.settings, s);

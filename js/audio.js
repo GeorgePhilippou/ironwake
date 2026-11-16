@@ -4,6 +4,7 @@
 export class Sfx {
   constructor() {
     this.enabled = true;
+    this.skin = 'sonar';
     this.ctx = null;
     this.out = null;
     this.noiseBuf = null;
@@ -35,7 +36,8 @@ export class Sfx {
 
   play(name) {
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
-    const fn = SOUNDS[name];
+    const era = this.skin.startsWith('h') ? this.skin.slice(1) : null;
+    const fn = (era && SOUNDS_ERA[era] && SOUNDS_ERA[era][name]) || (era && SOUNDS_RN[name]) || SOUNDS[name];
     if (!fn) return;
     try { fn(this, this.ctx.currentTime + 0.01); } catch { /* audio must never break the game */ }
   }
@@ -139,5 +141,64 @@ const SOUNDS = {
       s.tone(t + i * 0.26, { type: 'triangle', f0: f, dur: i === 3 ? 1.2 : 0.36, gain: 0.18 });
       s.tone(t + i * 0.26, { type: 'sine', f0: f / 2, dur: i === 3 ? 1.2 : 0.36, gain: 0.14 });
     });
+  },
+};
+
+// Royal Navy theme: a bosun's call instead of a sonar ping, the action-stations
+// alarm at the start of a battle, a bugle-like call to put to sea, and Morse
+// "V" (dot-dot-dot-dash) for victory.
+const SOUNDS_RN = {
+  ping(s, t) { // bosun's call: a rising, held, then falling whistle
+    s.tone(t, { f0: 1500, f1: 2350, dur: 0.18, gain: 0.08, attack: 0.03, curve: 'lin' });
+    s.tone(t + 0.16, { f0: 2350, f1: 2380, dur: 0.32, gain: 0.08, attack: 0.01 });
+    s.tone(t + 0.46, { f0: 2350, f1: 1400, dur: 0.22, gain: 0.07, attack: 0.01, curve: 'lin' });
+  },
+  stations(s, t) { // two-tone action-stations alarm
+    for (let i = 0; i < 4; i++) {
+      s.tone(t + i * 0.32, { type: 'square', f0: 520, dur: 0.15, gain: 0.07, attack: 0.005 });
+      s.tone(t + i * 0.32 + 0.16, { type: 'square', f0: 390, dur: 0.15, gain: 0.07, attack: 0.005 });
+    }
+  },
+  deploy(s, t) { // bugle-style call (natural harmonics of one tube)
+    [[392, 0.16], [523, 0.16], [659, 0.16], [784, 0.42]].reduce((at, [f, d]) => {
+      s.tone(at, { type: 'triangle', f0: f, dur: d, gain: 0.16, attack: 0.02 });
+      s.tone(at, { type: 'sawtooth', f0: f, dur: d, gain: 0.025, attack: 0.02 });
+      return at + d + 0.03;
+    }, t);
+  },
+  win(s, t) { // · · · —  then a short fanfare
+    let at = t;
+    for (const len of [0.09, 0.09, 0.09, 0.3]) { s.tone(at, { f0: 700, dur: len, gain: 0.14, attack: 0.004 }); at += len + 0.09; }
+    at += 0.15;
+    [[523, 0.18], [659, 0.18], [784, 0.18], [1047, 0.7]].forEach(([f, d]) => {
+      s.tone(at, { type: 'triangle', f0: f, dur: d, gain: 0.18 });
+      s.tone(at, { type: 'sine', f0: f / 2, dur: d, gain: 0.1 });
+      at += d + 0.02;
+    });
+  },
+};
+SOUNDS.stations = SOUNDS.ping;
+
+// Per battle. 1805: muzzle-loaded cannon and the drum beating to quarters.
+// 1982: an electronic action-stations alarm.
+const SOUNDS_ERA = {
+  1805: {
+    fire(s, t) {
+      s.tone(t, { f0: 90, f1: 28, dur: 0.9, gain: 0.7 });
+      s.noise(t, { dur: 0.9, gain: 0.45, f0: 1400, f1: 120, attack: 0.004 });
+      s.noise(t + 0.05, { dur: 1.4, gain: 0.08, type: 'bandpass', f0: 600, f1: 200, attack: 0.2 }); // rolling echo
+    },
+    stations(s, t) { // drum roll, then two heavy beats
+      for (let i = 0; i < 14; i++) s.noise(t + i * 0.055, { dur: 0.06, gain: 0.12 + i * 0.01, type: 'bandpass', f0: 220, q: 1.2 });
+      for (const at of [0.86, 1.18]) {
+        s.tone(t + at, { f0: 120, f1: 60, dur: 0.25, gain: 0.4 });
+        s.noise(t + at, { dur: 0.18, gain: 0.25, type: 'bandpass', f0: 260, q: 1 });
+      }
+    },
+  },
+  1982: {
+    stations(s, t) {
+      for (let i = 0; i < 6; i++) s.tone(t + i * 0.18, { type: 'square', f0: i % 2 ? 660 : 880, dur: 0.12, gain: 0.06, attack: 0.002 });
+    },
   },
 };

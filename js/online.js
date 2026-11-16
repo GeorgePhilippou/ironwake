@@ -18,6 +18,7 @@ import {
   CELLS, FLEET, UNKNOWN, MISS, HIT,
   createBoard, fire, isFleetComplete, isSunk, allSunk, shipAt, shipCells, inBounds,
 } from './engine.js';
+import { validEra, validSide, otherSide } from './skins.js';
 
 export const PROTOCOL = 1;
 export const SAVE_VERSION = 1;
@@ -37,8 +38,13 @@ export function cleanRoomCode(text) {
   return code.length === 4 && [...code].every((ch) => CODE_ALPHABET.includes(ch)) ? code : null;
 }
 
-export function newOnlineGame({ role, room, match = newMatchId(), first = 'host', prev = null, hitAndGoAgain = false, keepShipsApart = false }) {
+export function newOnlineGame({ role, room, match = newMatchId(), first = 'host', prev = null, hitAndGoAgain = false, keepShipsApart = false, era = '1940', hostSide = 'gb' }) {
+  const e = validEra(era);
+  const host = validSide(e, hostSide);
+  const mine = role === 'guest' ? otherSide(e, host) : host;
   return {
+    era: e,
+    sides: [mine, otherSide(e, mine)], // local view: [my navy, theirs]
     v: SAVE_VERSION,
     id: match,
     mode: 'online',
@@ -57,6 +63,7 @@ export function newOnlineGame({ role, room, match = newMatchId(), first = 'host'
     boards: [createBoard(), createBoard()],
     net: {
       role: role === 'guest' ? 'guest' : 'host',
+      hostSide: host,
       room,
       match,
       first: first === 'guest' ? 'guest' : 'host',
@@ -78,7 +85,7 @@ export function hello(game) {
     match: net.match,
     prev: net.prev,
     first: net.first,
-    rules: { hitAndGoAgain: game.hitAndGoAgain, keepShipsApart: game.keepShipsApart },
+    rules: { hitAndGoAgain: game.hitAndGoAgain, keepShipsApart: game.keepShipsApart, era: game.era, hostSide: net.hostSide },
     ready: net.ready,
     pending: net.pending,
   };
@@ -95,6 +102,8 @@ export function gameFromHello(msg, room) {
     first: msg.first === 'guest' ? 'guest' : 'host',
     hitAndGoAgain: rules.hitAndGoAgain === true,
     keepShipsApart: rules.keepShipsApart === true,
+    era: rules.era,
+    hostSide: rules.hostSide,
   });
 }
 
@@ -321,6 +330,9 @@ export function reviveOnline(raw) {
     g.cover = false;
     g.recorded = !!g.recorded;
     n.ready = !!n.ready;
+    g.era = validEra(g.era);
+    n.hostSide = validSide(g.era, n.hostSide);
+    { const mine = n.role === 'guest' ? otherSide(g.era, n.hostSide) : n.hostSide; g.sides = [mine, otherSide(g.era, mine)]; }
     n.prev = typeof n.prev === 'string' ? n.prev : null;
     n.themReady = !!n.themReady;
     n.rematch = n.rematch && typeof n.rematch.match === 'string' ? n.rematch : null;

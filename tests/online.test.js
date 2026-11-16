@@ -380,3 +380,29 @@ test('corrupt or tampered online saves are rejected', () => {
   pend.net.pending = 400;
   assert.equal(reviveOnline(pend), null);
 });
+
+test('historical battles: the guest commands the other side of the host\'s battle', () => {
+  const host = newOnlineGame({ role: 'host', room: 'ABCD', era: '1805', hostSide: 'fr' });
+  assert.deepEqual(host.sides, ['fr', 'gb']);
+  const guest = gameFromHello(hello(host), 'ABCD');
+  assert.equal(guest.era, '1805');
+  assert.deepEqual(guest.sides, ['gb', 'fr']);
+  const falklands = gameFromHello(hello(newOnlineGame({ role: 'host', room: 'ABCD', era: '1982', hostSide: 'gb' })), 'ABCD');
+  assert.deepEqual(falklands.sides, ['ar', 'gb']);
+  // Nonsense from the wire falls back to a real battle and side.
+  const odd = gameFromHello({ ...hello(host), rules: { era: '1066', hostSide: 'xx' } }, 'ABCD');
+  assert.equal(odd.era, '1940');
+  assert.deepEqual(odd.sides.slice().sort(), ['de', 'gb']);
+});
+
+test('historical battles survive a save and resume', () => {
+  const host = newOnlineGame({ role: 'host', room: 'ABCD', era: '1982', hostSide: 'ar' });
+  const back = reviveOnline(JSON.stringify(host));
+  assert.equal(back.era, '1982');
+  assert.deepEqual(back.sides, ['ar', 'gb']);
+  const legacy = JSON.parse(JSON.stringify(host));
+  delete legacy.era; delete legacy.sides; delete legacy.net.hostSide;
+  const old = reviveOnline(legacy);
+  assert.equal(old.era, '1940');
+  assert.deepEqual(old.sides, ['gb', 'de'], 'saves from before this feature still load');
+});

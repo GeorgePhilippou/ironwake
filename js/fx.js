@@ -43,6 +43,7 @@ export class Fx {
   }
 
   aim(x, y, size, dur) {
+    if (document.hidden) return; // nothing to see; don't queue a burst for later
     if (this.reduced) return;
     this.rings.push({
       x, y, r0: size * 0.64, r1: size * 0.2, life: 0, max: dur / 1000,
@@ -52,6 +53,7 @@ export class Fx {
   }
 
   splash(x, y, s = 1) {
+    if (document.hidden) return; // nothing to see; don't queue a burst for later
     this.rings.push({ x, y, r0: 4 * s, r1: 34 * s, life: 0, max: 0.6, color: this.light ? '#3c6f7a' : '#bfe9e4', width: 2.5 });
     if (this.reduced) return this.kick();
     this.rings.push({ x, y, r0: 2 * s, r1: 56 * s, life: -0.12, max: 0.8, color: this.light ? '#3c6f7a' : '#bfe9e4', width: 1.5 });
@@ -64,6 +66,7 @@ export class Fx {
   }
 
   explosion(x, y, s = 1) {
+    if (document.hidden) return; // nothing to see; don't queue a burst for later
     this.rings.push({ x, y, r0: 6 * s, r1: 58 * s, life: 0, max: 0.4, color: '#ffb347', width: 4 });
     if (this.reduced) return this.kick();
     this.parts.push({ x, y, vx: 0, vy: 0, life: 0, max: 0.3, size: 46 * s, color: '#fff3c9', g: 0, drag: 0, kind: 'flash' });
@@ -81,6 +84,7 @@ export class Fx {
   }
 
   fireworks(n = 6) {
+    if (document.hidden) return; // nothing to see; don't queue a burst for later
     if (this.reduced) return;
     const colors = ['#46f0c4', '#ffbe55', '#ffffff', '#7fd4ff'];
     for (let k = 0; k < n; k++) {

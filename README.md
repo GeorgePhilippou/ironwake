@@ -8,6 +8,25 @@ Solo against three computer opponents, or two-player pass-and-play on one device
 Install on iPad: open the link in Safari → Share → **Add to Home Screen**. It then
 runs full-screen and works offline.
 
+## Themes and historical battles
+
+Settings → Theme (or the flag button on the title screen) switches between the
+original **Sonar** console and **Historical**: three real wars of the Royal Navy,
+where each player commands one side with ships that served in that war.
+
+| Battle | Royal Navy | Opponent |
+| --- | --- | --- |
+| Trafalgar, 1805 | HMS Victory, Temeraire, Euryalus, Naiad, Pickle | Marine Impériale: Bucentaure, Redoutable, Hermione, Hortense, Argus |
+| Second World War | HMS Ark Royal, Warspite, Belfast, Upholder, Gladiolus | Kriegsmarine: Bismarck, Scharnhorst, Prinz Eugen, U-47, S-38 |
+| Falklands, 1982 | HMS Hermes, Invincible, Sheffield, Conqueror, Ardent | Armada Argentina: ARA 25 de Mayo, General Belgrano, Hércules, Santa Fe, Guerrico |
+
+Every ship is drawn as a period plan (sail, Western Approaches and Baltic
+camouflage, 1982 grey) under its own flag; each battle has its own look, words
+and sounds, in day and night versions. Germany is shown with the Balkenkreuz,
+not the swastika war ensign. On two iPads the host picks the battle and side and
+the other iPad takes the opposite side. Code: `js/skins.js` (roster and words),
+`js/art.js`, `js/audio.js` and the historical sections of `css/style.css`.
+
 ## Two iPads
 
 Each player can use their own iPad. One chooses **Two iPads → Host a game** and

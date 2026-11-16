@@ -227,3 +227,17 @@ test('corrupt or tampered saves are thrown away, not half-loaded', () => {
   noWinner.phase = 'over';
   assert.equal(reviveGame(noWinner), null);
 });
+
+test('a game records its historical battle and both sides', () => {
+  const g = newGame({ mode: 'solo', era: '1805', side: 'fr' });
+  assert.equal(g.era, '1805');
+  assert.deepEqual(g.sides, ['fr', 'gb'], 'the computer takes the other side');
+  assert.deepEqual(newGame({ mode: 'duo', era: '1940', side: 'de' }).sides, ['de', 'gb']);
+  assert.deepEqual(newGame({ era: '1982', side: 'zz' }).sides, ['gb', 'ar'], 'unknown sides fall back');
+  const back = reviveGame(JSON.stringify(g));
+  assert.equal(back.era, '1805');
+  assert.deepEqual(back.sides, ['fr', 'gb']);
+  const legacy = JSON.parse(JSON.stringify(g));
+  delete legacy.era; delete legacy.sides;
+  assert.deepEqual(reviveGame(legacy).sides, ['gb', 'de'], 'older saves get the default battle');
+});

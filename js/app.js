@@ -11,7 +11,11 @@ import {
   loadSettings, saveSettings, loadStats, saveStats, blankStats, recordSolo,
   loadGame, saveGame, clearGame,
 } from './storage.js';
-import { shipSVG, EMBLEM, ICONS } from './art.js';
+import { shipSVG, EMBLEM, RN_EMBLEM, ICONS, unionJack, sideFlag, sideEnsign } from './art.js';
+import {
+  setContext, historical, era as ctxEra, mySide, theirSide, myArt, theirArt, sideInfo, ERAS, ERA_IDS,
+  t as say, ownShip, ownType, enemyShip,
+} from './skins.js';
 import { Sfx } from './audio.js';
 import { Fx } from './fx.js';
 import { VERSION } from './version.js';
@@ -72,6 +76,7 @@ const timing = () => (reduced()
   ? { aim: 120, hold: 560, sunkHold: 1000, think: 380, result: 500 }
   : { aim: 280, hold: 760, sunkHold: 1650, think: 720, result: 900 });
 
+let skinDrawn = false;
 function applySettings() {
   const root = document.documentElement;
   if (settings.theme === 'auto') delete root.dataset.theme; else root.dataset.theme = settings.theme;
@@ -79,7 +84,68 @@ function applySettings() {
   sfx.enabled = settings.sound;
   fx.reduced = reduced();
   fx.light = isLight();
-  $('theme-color').setAttribute('content', isLight() ? '#e4dfd0' : '#04090d');
+  const changed = !skinDrawn || themeKey !== `${settings.skin}.${settings.era}.${settings.side}`;
+  skinDrawn = true;
+  themeKey = `${settings.skin}.${settings.era}.${settings.side}`;
+  root.dataset.skin = settings.skin;
+  syncContext();
+  if (changed) applySkin();
+}
+
+/**
+ * Point the theme at whoever is looking at the screen: their battle and their
+ * navy. Without a game (title screen) it follows the choice in Settings.
+ */
+function syncContext() {
+  let era = settings.era;
+  let mine = settings.side;
+  let theirs = null;
+  if (game && screen !== 'title') {
+    era = game.era;
+    const p = game.mode === 'duo' ? (screen === 'place' ? game.placing : viewer) : 0;
+    mine = game.sides[p];
+    theirs = game.sides[1 - p];
+  }
+  setContext({ skin: settings.skin, era, mine, theirs });
+  const root = document.documentElement;
+  const hist = historical();
+  root.dataset.era = hist ? ctxEra() : '';
+  root.dataset.side = hist ? mySide() : '';
+  sfx.skin = hist ? `h${ctxEra()}` : 'sonar';
+  const light = isLight();
+  const colours = { 1805: ['#e6d6b0', '#1d140c'], 1940: ['#e9dfc4', '#0b1626'], 1982: ['#dfe2e1', '#101614'] };
+  $('theme-color').setAttribute('content', hist ? colours[ctxEra()][light ? 0 : 1] : light ? '#e4dfd0' : '#04090d');
+  // Words and flags that live in the page itself.
+  const key = `${settings.skin}|${ctxEra()}|${mySide()}|${theirSide()}`;
+  if (key === lastContextKey) return;
+  lastContextKey = key;
+  document.querySelectorAll('[data-emblem]').forEach((el) => { el.innerHTML = hist ? RN_EMBLEM : EMBLEM; });
+  $('title-flag').innerHTML = hist ? sideFlag(mySide(), 'xMidYMid slice', 'flag-svg') : '';
+  $('own-ensign').innerHTML = hist ? sideEnsign(mySide()) : '';
+  $('enemy-ensign').innerHTML = hist ? sideEnsign(theirSide()) : '';
+  $('tagline').textContent = say('tagline');
+  $('btn-deploy').textContent = say('deployButton');
+  $('own-title').textContent = say('yourFleet');
+  $('enemy-title').textContent = say('enemyFleet');
+  if (screen === 'place') $('place-title').textContent = say('deployTitle');
+  const sk = $('btn-skin');
+  sk.innerHTML = hist ? ICONS.sonar : unionJack('xMidYMid meet', 'mini-flag');
+  sk.setAttribute('aria-label', hist ? 'Switch to the sonar theme' : 'Switch to the historical theme');
+  sk.title = hist ? 'Sonar theme' : 'Historical theme';
+  for (const b of [placeBoard, targetBoard, ownBoard]) b && b.resetShips();
+}
+let lastContextKey = '';
+let themeKey = '';
+
+/** Redraw what is on screen after the theme changes. */
+function applySkin() {
+  lastContextKey = '';
+  syncContext();
+  if (!game) return;
+  if (screen === 'place') renderPlacement();
+  else if (screen === 'battle' && !covered && !busy) {
+    if (game.phase === 'battle') beginTurn(); else paintBattle();
+  }
 }
 mqMotion.addEventListener('change', applySettings);
 mqLight.addEventListener('change', applySettings);
@@ -128,7 +194,7 @@ $('toast').addEventListener('click', () => { if (toastAction) toastAction(); });
 function callout(text, kind, anchor, dur = 1100, small = false) {
   const el = $('callout');
   const r = anchor.getBoundingClientRect();
-  el.className = `callout ${kind}${small ? ' small' : ''}`;
+  el.className = `callout ${kind}${small || text.length > 18 ? ' small' : ''}`;
   el.textContent = text;
   el.style.left = `${r.left + r.width / 2}px`;
   el.style.top = `${r.top + r.height / 2}px`;
@@ -152,8 +218,8 @@ const fmtTime = (ms) => {
 const pct = (x) => `${Math.round(x * 100)}%`;
 
 // ───────── Board component ─────────
-function shipHTML(s, cls = '') {
-  return `<div class="ship ${cls}" data-id="${s.id}" style="left:${s.c * 10}%;top:${s.r * 10}%;width:${(s.horiz ? s.len : 1) * 10}%;height:${(s.horiz ? 1 : s.len) * 10}%">${shipSVG(s.id, s.horiz)}</div>`;
+function shipHTML(s, cls = '', art = myArt()) {
+  return `<div class="ship ${cls}" data-id="${s.id}" style="left:${s.c * 10}%;top:${s.r * 10}%;width:${(s.horiz ? s.len : 1) * 10}%;height:${(s.horiz ? 1 : s.len) * 10}%">${shipSVG(s.id, s.horiz, art)}</div>`;
 }
 
 function makeBoard(host, { buttons = false, onCell = null } = {}) {
@@ -211,7 +277,7 @@ function makeBoard(host, { buttons = false, onCell = null } = {}) {
   return {
     host, grid, cells, shipsEl, preview: host.querySelector('.preview'),
     /** ships: 'all' shows every ship; 'sunk' shows wrecks only; reveal adds the survivors as outlines. */
-    paint(board, { ships = 'all', last = -1, fresh = -1, freshShip = null, reveal = false } = {}) {
+    paint(board, { ships = 'all', last = -1, fresh = -1, freshShip = null, reveal = false, art = myArt() } = {}) {
       const sunkCells = new Set();
       const sunkIds = new Set();
       for (const s of board.ships) {
@@ -234,10 +300,10 @@ function makeBoard(host, { buttons = false, onCell = null } = {}) {
       const list = board.ships
         .filter((s) => ships === 'all' || sunkIds.has(s.id) || reveal)
         .map((s) => ({ s, cls: sunkIds.has(s.id) ? 'wreck' : ships === 'all' ? '' : 'revealed' }));
-      const key = list.map(({ s, cls }) => `${s.id}.${s.r}.${s.c}.${s.horiz ? 1 : 0}.${cls}`).join('|');
+      const key = art + '|' + list.map(({ s, cls }) => `${s.id}.${s.r}.${s.c}.${s.horiz ? 1 : 0}.${cls}`).join('|');
       if (key !== shipKey) {
         shipKey = key;
-        shipsEl.innerHTML = list.map(({ s, cls }) => shipHTML(s, cls)).join('');
+        shipsEl.innerHTML = list.map(({ s, cls }) => shipHTML(s, cls, art)).join('');
         if (freshShip) {
           const el = shipsEl.querySelector(`[data-id="${freshShip}"]`);
           if (el) el.classList.add('fresh');
@@ -265,6 +331,7 @@ function showScreen(name) {
 
 function showTitle() {
   showScreen('title');
+  syncContext();
   const live = game && game.phase !== 'over';
   $('btn-resume').hidden = !live;
   $('btn-solo').classList.toggle('primary', !live);
@@ -335,7 +402,7 @@ function enterPlacement() {
   const duo = game.mode === 'duo';
   $('place-eyebrow').textContent = online() ? `Two iPads · ${game.net.role === 'host' ? 'Hosting' : 'Joined'} room ${game.net.room}`
     : duo ? `Pass & play · Player ${game.placing + 1}` : `Solo mission · ${LEVEL_INFO[game.difficulty].name}`;
-  $('place-title').textContent = 'Deploy your fleet';
+  $('place-title').textContent = say('deployTitle');
   $('place-hint').textContent = game.keepShipsApart
     ? 'Leave a one-square gap between ships, including at corners. Tap to rotate.'
     : 'Drag to place · tap to rotate · drag off the grid to remove';
@@ -345,12 +412,13 @@ function enterPlacement() {
 }
 
 function renderPlacement(pop = null) {
+  syncContext();
   const ships = draft();
   placeBoard.shipsEl.innerHTML = ships.map((s) => shipHTML(s, pop === 'all' || pop === s.id ? 'dropped' : '')).join('');
   $('tray').innerHTML = FLEET.map((spec) => {
     const placed = ships.some((s) => s.id === spec.id);
     return `<button type="button" class="tray-item${placed ? ' placed' : ''}" data-id="${spec.id}" style="--len:${spec.len}"${placed ? ' tabindex="-1"' : ''}>
-      <span class="ship">${shipSVG(spec.id)}</span><span class="nm">${spec.name}</span><span class="ln">${placed ? 'ON GRID' : `${spec.len} CELLS`}</span></button>`;
+      <span class="ship">${shipSVG(spec.id, true, myArt())}</span><span class="nm" title="${ownType(spec.id)}">${ownShip(spec.id)}</span><span class="ln">${placed ? 'ON GRID' : `${spec.len} CELLS`}</span></button>`;
   }).join('');
   $('tray-count').textContent = `${ships.length} / ${FLEET.length}`;
   $('btn-deploy').disabled = !isFleetComplete(ships, game.keepShipsApart);
@@ -392,7 +460,7 @@ function dragMove(e) {
     d.ghost.className = 'ship drag-ghost';
     d.ghost.style.width = `${(d.horiz ? d.len : 1) * d.cell}px`;
     d.ghost.style.height = `${(d.horiz ? 1 : d.len) * d.cell}px`;
-    d.ghost.innerHTML = shipSVG(d.id, d.horiz);
+    d.ghost.innerHTML = shipSVG(d.id, d.horiz, myArt());
     document.body.append(d.ghost);
     d.el.classList.add('lifted');
   }
@@ -456,8 +524,8 @@ function dragEnd(e, cancelled = false) {
   } else if (d.cand) {
     const v = validatePlacement(draft(), d.cand, game.keepShipsApart);
     if (v.ok) { setDraftShip(d.cand); pop = d.id; sfx.play('place'); haptic('place'); }
-    else if (v.reason === 'overlap') refusal = `That overlaps your ${shipName(v.with)}.`;
-    else if (v.reason === 'touching') refusal = `Leave a one-square gap around your ${shipName(v.with)}.`;
+    else if (v.reason === 'overlap') refusal = `That overlaps your ${ownShip(v.with)}.`;
+    else if (v.reason === 'touching') refusal = `Leave a one-square gap around your ${ownShip(v.with)}.`;
     else refusal = 'That would put the ship off the grid.';
   } else if (d.source === 'board') {
     game.draft = draft().filter((s) => s.id !== d.id);
@@ -549,22 +617,25 @@ function fleetRows(board, justSunk) {
     const ship = board.ships.find((s) => s.id === spec.id);
     const sunk = ship && isSunk(board, ship);
     return `<div class="fleet-row${sunk ? ' sunk' : ''}${justSunk === spec.id ? ' just' : ''}" style="--len:${spec.len}">
-      <span class="ship${sunk ? ' wreck' : ''}">${shipSVG(spec.id)}</span><span class="nm">${spec.name}</span><span class="st">${sunk ? 'SUNK' : 'AFLOAT'}</span></div>`;
+      <span class="ship${sunk ? ' wreck' : ''}">${shipSVG(spec.id, true, theirArt())}</span><span class="nm">${enemyShip(spec.id)}</span><span class="st">${sunk ? say('sunk') : say('afloat')}</span></div>`;
   }).join('');
 }
 
 function paintBattle({ fresh = -1, freshShip = null, freshOn = null } = {}) {
+  syncContext();
   const over = game.phase === 'over';
   const theirs = game.boards[1 - viewer];
   const mine = game.boards[viewer];
   const last = game.last;
   targetBoard.paint(theirs, {
+    art: theirArt(),
     ships: 'sunk', reveal: over,
     last: last && last.by === viewer ? last.cell : -1,
     fresh: freshOn === 'target' ? fresh : -1,
     freshShip: freshOn === 'target' ? freshShip : null,
   });
   ownBoard.paint(mine, {
+    art: myArt(),
     ships: 'all',
     last: last && last.by !== viewer ? last.cell : -1,
     fresh: freshOn === 'own' ? fresh : -1,
@@ -594,7 +665,8 @@ function blankBattle() {
 }
 
 function logShot(by, cell, result, shipId) {
-  const what = result === 'miss' ? 'miss' : result === 'hit' ? '<span class="hit">hit</span>' : `<span class="hit">${shipName(shipId)} sunk</span>`;
+  const sunkName = shipId ? (by === viewer ? enemyShip(shipId) : ownShip(shipId)) : 'Ship';
+  const what = result === 'miss' ? 'miss' : result === 'hit' ? '<span class="hit">hit</span>' : `<span class="hit">${sunkName} sunk</span>`;
   log.unshift(`<div><b>${nameOf(by)}</b> → ${cellName(cell)} · ${what}</div>`);
   log.length = Math.min(log.length, 4);
 }
@@ -608,7 +680,7 @@ function enterBattle(fresh = false) {
   if (online() && game.phase === 'placement') {
     underFire = false;
     paintBattle();
-    setTurn('p2', 'Fleet deployed', 'Waiting for your opponent to deploy…');
+    setTurn('p2', say('fleetDeployed'), 'Waiting for your opponent to deploy…');
     return;
   }
   if (game.mode === 'duo' && game.cover) {
@@ -618,8 +690,8 @@ function enterBattle(fresh = false) {
   }
   beginTurn();
   if (fresh) {
-    sfx.play('ping');
-    callout('Battle stations', 'info', targetBoard.grid, 1300);
+    sfx.play('stations');
+    callout(say('battleStations'), 'info', targetBoard.grid, 1300);
   }
 }
 
@@ -629,9 +701,9 @@ function beginTurn() {
   underFire = false;
   paintBattle();
   const extraShot = game.hitAndGoAgain && game.last?.by === viewer;
-  const prompt = extraShot ? 'Fire again' : 'Choose a square to fire on';
+  const prompt = extraShot ? say('fireAgain') : say('choose');
   if (game.mode === 'solo') {
-    if (game.turn === 0) setTurn('you', 'Your turn', prompt);
+    if (game.turn === 0) setTurn('you', say('yourTurn'), prompt);
     else aiTurn();
   } else {
     setTurn(viewer === 0 ? 'you' : 'p2', `Player ${viewer + 1}`, prompt);
@@ -642,7 +714,7 @@ async function aiTurn() {
   const myGen = gen;
   busy = true;
   underFire = true;
-  setTurn('enemy', 'Enemy turn', 'Incoming fire…');
+  setTurn('enemy', say('enemyTurn'), say('incoming'));
   await wait(timing().think);
   if (myGen !== gen || !game || game.phase !== 'battle' || game.turn !== 1) return;
   const cell = chooseShot(game.difficulty, publicView(game.boards[0]));
@@ -695,7 +767,7 @@ async function playShot(i, result, ship, incoming, withAim) {
     await wait(t.aim);
     if (myGen !== gen) return false;
   }
-  const name = ship ? shipName(ship.id) : 'Ship';
+  const name = ship ? (incoming ? ownShip(ship.id) : enemyShip(ship.id)) : 'Ship';
   const freshOn = incoming ? 'own' : 'target';
   paintBattle({ fresh: i, freshShip: result === 'sunk' && ship ? ship.id : null, freshOn });
   const to = ui.cellCenter(i);
@@ -704,13 +776,13 @@ async function playShot(i, result, ship, incoming, withAim) {
     fx.splash(to.x, to.y, scale);
     sfx.play('splash');
     haptic('miss');
-    callout(incoming ? 'They missed' : 'Miss', 'miss', ui.grid, 900, incoming);
+    callout(incoming ? say('theyMissed') : say('miss'), 'miss', ui.grid, 900, incoming);
   } else if (result === 'hit') {
     fx.explosion(to.x, to.y, scale);
     sfx.play('hit');
     haptic('hit');
     shake(ui.host);
-    callout(incoming ? `${name} hit` : 'Hit', 'hit', ui.grid, 900, incoming);
+    callout(incoming ? `${name} hit` : say('hit'), 'hit', ui.grid, 900, incoming);
   } else {
     sfx.play('sunk');
     haptic('sunk');
@@ -854,8 +926,8 @@ function onNetEvent(e) {
       queue(() => {
         if (screen !== 'battle') return;
         beginTurn();
-        sfx.play('ping');
-        callout('Battle stations', 'info', targetBoard.grid, 1300);
+        sfx.play('stations');
+        callout(say('battleStations'), 'info', targetBoard.grid, 1300);
       });
       break;
     case 'incoming':
@@ -925,9 +997,9 @@ function refreshOnlineTurn() {
   if (game.turn === 0) {
     const extra = game.hitAndGoAgain && game.last && game.last.by === 0;
     if (game.net.pending !== null) setTurn('you', 'Firing…', linked ? `${cellName(game.net.pending)} — waiting for the result` : away);
-    else setTurn('you', 'Your turn', linked ? (extra ? 'Fire again' : 'Choose a square to fire on') : away);
+    else setTurn('you', say('yourTurn'), linked ? (extra ? say('fireAgain') : say('choose')) : away);
   } else {
-    setTurn('enemy', 'Their turn', linked ? 'Waiting for their shot…' : away);
+    setTurn('enemy', say('theirTurn'), linked ? 'Waiting for their shot…' : away);
   }
 }
 
@@ -944,6 +1016,8 @@ function beginRematch({ match, first }) {
     prev: old.net.match,
     hitAndGoAgain: old.hitAndGoAgain,
     keepShipsApart: old.keepShipsApart,
+    era: old.era,
+    hostSide: old.net.hostSide,
   });
   log = [];
   persist();
@@ -1018,10 +1092,12 @@ function openHostSetup() {
     <div class="lbl"><b>${title}</b><span>${description}</span></div>
     <button type="button" id="${id}" class="switch" role="switch" aria-checked="false" aria-label="${title}"></button></div>`;
   const body = openSheet('Host a game', `
+    ${battlePicker('You command — the other iPad gets the other side')}
     ${ruleSwitch('hit-and-go-again', 'Hit and go again', 'Hit or sink a ship to fire again. A miss ends your turn.')}
     ${ruleSwitch('keep-ships-apart', 'Keep ships apart', 'Leave a one-square gap between ships, including at corners.')}
-    <p style="margin-top:12px">The rules you choose apply to both iPads. You fire first.</p>
+    <p style="margin-top:12px">The battle and rules you choose apply to both iPads. You fire first.</p>
     <div class="card-actions"><button class="btn primary" id="host-go">Create room</button></div>`);
+  bindBattlePicker(body);
   const enabled = (b) => b.getAttribute('aria-checked') === 'true';
   body.querySelectorAll('.switch').forEach((b) => b.addEventListener('click', () => {
     b.setAttribute('aria-checked', !enabled(b));
@@ -1032,6 +1108,8 @@ function openHostSetup() {
     startHost({
       hitAndGoAgain: enabled(body.querySelector('#hit-and-go-again')),
       keepShipsApart: enabled(body.querySelector('#keep-ships-apart')),
+      era: settings.era,
+      hostSide: settings.side,
     });
   });
 }
@@ -1128,15 +1206,18 @@ function showCover() {
   const placing = game.phase === 'placement';
   const p = placing ? game.placing : game.turn;
   $('cover-card').dataset.p = p;
-  $('cover-eyebrow').textContent = `Pass the ${DEVICE} to`;
+  $('cover-eyebrow').textContent = say('passTo', DEVICE);
   $('cover-who').textContent = `Player ${p + 1}`;
+  const coverSide = game.sides[p];
+  $('cover-flag').innerHTML = settings.skin === 'history' ? sideFlag(coverSide) : '';
+  $('cover-navy').textContent = settings.skin === 'history' ? sideInfo(coverSide, game.era).name : '';
   $('cover-text').textContent = placing
     ? `Deploy your fleet in secret. Player ${2 - p}, look away.`
     : `Your turn to fire. Player ${2 - p}, look away.`;
   const last = game.last;
   const lastEl = $('cover-last');
   if (!placing && last && last.by !== p) {
-    const what = last.result === 'miss' ? 'MISS' : last.result === 'hit' ? 'HIT' : `${shipName(last.shipId).toUpperCase()} SUNK`;
+    const what = last.result === 'miss' ? 'MISS' : last.result === 'hit' ? 'HIT' : `${ownShip(last.shipId).toUpperCase()} SUNK`;
     lastEl.textContent = `Player ${last.by + 1} fired at ${cellName(last.cell)} — ${what}`;
     lastEl.hidden = false;
   } else {
@@ -1190,13 +1271,16 @@ async function showResult() {
   viewer = solo ? 0 : game.winner;
   underFire = false;
   paintBattle();
-  setTurn(solo && !won ? 'enemy' : 'you', solo ? (won ? 'Victory' : 'Defeat') : `Player ${game.winner + 1} wins`, 'Tap for results');
+  setTurn(solo && !won ? 'enemy' : 'you', solo ? (won ? say('victory') : say('defeat')) : `Player ${game.winner + 1} wins`, 'Tap for results');
   await wait(timing().result);
   if (myGen !== gen) return;
 
   const card = $('result-card');
   card.dataset.outcome = solo && !won ? 'lose' : 'win';
-  $('verdict').textContent = solo ? (won ? 'Victory' : 'Defeat') : `Player ${game.winner + 1} wins`;
+  // The flag of the winner; after a defeat, your own colours, lowered.
+  const flagSide = solo ? game.sides[0] : game.sides[game.winner];
+  $('result-flag').innerHTML = settings.skin === 'history' ? sideFlag(flagSide) : '';
+  $('verdict').textContent = solo ? (won ? say('victory') : say('defeat')) : `Player ${game.winner + 1} wins`;
   const time = fmtTime(game.elapsedMs);
   if (solo) {
     const me = playerStats(game, 0);
@@ -1229,7 +1313,7 @@ async function showResult() {
 
 $('btn-rematch').addEventListener('click', () => {
   sfx.play('click');
-  if (!online()) { startGame(game); return; }
+  if (!online()) { startGame({ ...game, side: game.sides[0] }); return; }
   const r = requestRematch(game);
   r.send.forEach(send);
   if (r.start) beginRematch(r.start); else renderRematch();
@@ -1292,16 +1376,49 @@ function levelCards(selected) {
     </button>`).join('')}</div>`;
 }
 
+
+// ───────── Historical battle and side ─────────
+function battlePicker(commandLabel) {
+  if (settings.skin !== 'history') return '';
+  const eras = ERA_IDS.map((id) => `<button type="button" class="era-card" data-era="${id}" aria-pressed="${id === settings.era}">
+      <b>${ERAS[id].title}</b><span class="yr">${ERAS[id].years}</span><span class="bl">${ERAS[id].blurb}</span></button>`).join('');
+  return `<div class="row col"><div class="lbl"><b>Battle</b></div><div class="eras">${eras}</div></div>
+    <div class="row col"><div class="lbl"><b>${commandLabel}</b></div><div class="sides" id="side-pick">${sideCards()}</div></div>`;
+}
+function sideCards() {
+  return ERAS[settings.era].sides.map((side) => `<button type="button" class="side-card" data-side="${side}" aria-pressed="${side === settings.side}">
+    <span class="sf">${sideFlag(side)}</span><b>${sideInfo(side, settings.era).name}</b></button>`).join('');
+}
+function bindBattlePicker(body) {
+  const save = () => { saveSettings(settings); applySettings(); sfx.play('toggle'); };
+  const bindSides = () => body.querySelectorAll('.side-card').forEach((b) => b.addEventListener('click', () => {
+    settings.side = b.dataset.side;
+    body.querySelectorAll('.side-card').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    save();
+  }));
+  body.querySelectorAll('.era-card').forEach((b) => b.addEventListener('click', () => {
+    settings.era = b.dataset.era;
+    if (!ERAS[settings.era].sides.includes(settings.side)) settings.side = ERAS[settings.era].sides[0];
+    body.querySelectorAll('.era-card').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    body.querySelector('#side-pick').innerHTML = sideCards();
+    bindSides();
+    save();
+  }));
+  bindSides();
+}
+
 function openSetup(mode) {
   const solo = mode === 'solo';
   const ruleSwitch = (id, title, description) => `<div class="row">
     <div class="lbl"><b>${title}</b><span>${description}</span></div>
     <button type="button" id="${id}" class="switch" role="switch" aria-checked="false" aria-label="${title}"></button></div>`;
   const body = openSheet(solo ? 'Solo mission' : 'Pass & play', `
+    ${battlePicker(solo ? 'You command' : 'Player 1 commands')}
     ${solo ? levelCards(settings.difficulty) : ''}
     ${ruleSwitch('hit-and-go-again', 'Hit and go again', 'Hit or sink a ship to fire again. A miss ends your turn.')}
     ${ruleSwitch('keep-ships-apart', 'Keep ships apart', 'Leave a one-square gap between ships, including at corners.')}
     <div class="card-actions"><button class="btn primary" id="setup-go">Deploy fleet</button></div>`);
+  bindBattlePicker(body);
   body.querySelectorAll('.level').forEach((b) => b.addEventListener('click', () => {
     settings.difficulty = b.dataset.level;
     saveSettings(settings);
@@ -1320,6 +1437,8 @@ function openSetup(mode) {
       difficulty: settings.difficulty,
       hitAndGoAgain: enabled(body.querySelector('#hit-and-go-again')),
       keepShipsApart: enabled(body.querySelector('#keep-ships-apart')),
+      era: settings.era,
+      side: settings.side,
     });
   });
 }
@@ -1337,6 +1456,8 @@ function openSettings() {
       ${seg('difficulty', settings.difficulty, LEVELS.map((l) => [l, LEVEL_INFO[l].name]))}</div>
     <div class="row col"><div class="lbl"><b>Appearance</b><span>Night watch, day chart, or follow the ${DEVICE}</span></div>
       ${seg('theme', settings.theme, [['auto', 'Auto'], ['dark', 'Night'], ['light', 'Day']])}</div>
+    <div class="row col"><div class="lbl"><b>Theme</b><span>The modern sonar console, or real naval battles: Trafalgar, the Second World War and the Falklands</span></div>
+      ${seg('skin', settings.skin, [['sonar', 'Sonar'], ['history', 'Historical']])}</div>
     <p class="meta">Ironwake ${VERSION} · plays fully offline</p>`);
   body.querySelectorAll('.switch').forEach((b) => b.addEventListener('click', () => {
     const on = b.getAttribute('aria-checked') !== 'true';
@@ -1387,7 +1508,7 @@ function openHelp() {
   const sw = (cls) => `<div class="swatch"><i class="cell ${cls}" style="position:absolute;inset:0"></i></div>`;
   openSheet('How to play', `<div class="help">
     <h3>Deploy</h3>
-    <p>Each side hides five ships on a 10 × 10 grid: Carrier (5), Dreadnought (4), Cruiser (3), Submarine (3) and Corvette (2). Drag a ship on to the grid, tap it to rotate, or let Auto-place do it. Ships may touch in classic play. With Keep ships apart enabled, leave a one-square gap between ships, including at corners.</p>
+    <p>Each side hides five ships on a 10 × 10 grid: ${FLEET.map((f) => `${ownShip(f.id)} (${f.len})`).join(', ').replace(/, ([^,]*)$/, ' and $1')}. Drag a ship on to the grid, tap it to rotate, or let Auto-place do it. Ships may touch in classic play. With Keep ships apart enabled, leave a one-square gap between ships, including at corners.</p>
     <h3>Engage</h3>
     <p>Tap any square you haven't tried. In classic play, you take one shot per turn. With Hit and go again enabled, a hit or sinking earns another shot and a miss passes the turn.</p>
     <div class="legend">
@@ -1399,6 +1520,12 @@ function openHelp() {
     <p>Sink all five enemy ships before yours go down. The fleet panel shows what's still afloat.</p>
     <h3>Pass &amp; play</h3>
     <p>Two players share one ${DEVICE}. When the turn passes, a handover screen hides both fleets until the next player says they're ready.</p>
+    <h3>Historical battles</h3>
+    <p>Choose <b>Historical</b> in Settings → Theme, then pick a battle and a side when you start a game. Each navy fights with ships that served in that war:</p>
+    <p><b>Trafalgar, 1805</b> — Royal Navy (HMS Victory, Temeraire, Euryalus, Naiad, Pickle) against the Marine Impériale (Bucentaure, Redoutable, Hermione, Hortense, Argus).<br>
+    <b>Second World War</b> — Royal Navy (HMS Ark Royal, Warspite, Belfast, Upholder, Gladiolus) against the Kriegsmarine (Bismarck, Scharnhorst, Prinz Eugen, U-47, S-38).<br>
+    <b>Falklands, 1982</b> — Royal Navy (HMS Hermes, Invincible, Sheffield, Conqueror, Ardent) against the Armada Argentina (ARA 25 de Mayo, General Belgrano, Hércules, Santa Fe, Guerrico).</p>
+    <p>Solo, the computer takes the other side; in pass &amp; play, Player 2 does; on two iPads, the iPad that joins does. Bigger ships fill longer spaces on the grid; the rules are the same as ever.</p>
     <h3>Two iPads</h3>
     <p>Each player uses their own iPad on the same Wi-Fi. One chooses <b>Two iPads → Host a game</b> and reads out the four-letter room code; the other chooses <b>Join a game</b> and types it in. Your fleet never leaves your iPad until a ship is sunk. If an iPad goes to sleep, the game reconnects by itself when it wakes.</p>
     <h3>Opponents</h3>
@@ -1428,7 +1555,6 @@ function openPause() {
 }
 
 // ───────── Wiring ─────────
-document.querySelectorAll('[data-emblem]').forEach((el) => { el.innerHTML = EMBLEM; });
 document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = ICONS[el.dataset.icon] + el.innerHTML; });
 $('duo-detail').textContent = `Two players, one ${DEVICE}`;
 $('foot').textContent = `v${VERSION}`;
@@ -1441,6 +1567,14 @@ for (const id of ['place-net', 'battle-net']) $(id).addEventListener('click', ()
 $('btn-stats').addEventListener('click', () => { sfx.play('click'); openStats(); });
 $('btn-help').addEventListener('click', () => { sfx.play('click'); openHelp(); });
 $('btn-settings').addEventListener('click', () => { sfx.play('click'); openSettings(); });
+$('btn-skin').addEventListener('click', () => {
+  settings.skin = settings.skin === 'history' ? 'sonar' : 'history';
+  saveSettings(settings);
+  applySettings();
+  sfx.play('ping');
+  haptic('tap');
+  toast(settings.skin === 'history' ? `${sideInfo(settings.side, settings.era).name} · ${ERAS[settings.era].title}, ${ERAS[settings.era].years}` : 'Sonar console');
+});
 $('battle-menu').addEventListener('click', () => { sfx.play('click'); openPause(); });
 
 // Audio can only start from a gesture; keep trying in case iOS suspended it.
