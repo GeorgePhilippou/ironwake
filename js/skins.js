@@ -26,7 +26,7 @@ export const ERAS = {
     id: '1940',
     title: 'Second World War',
     years: '1939–45',
-    tagline: 'The Battle of the Atlantic · 1939–1945',
+    tagline: 'The Battle of the Atlantic · 1939\u2060–\u20601945', // word joiners keep the years together
     blurb: 'The Home Fleet against the Kriegsmarine’s raiders and U-boats.',
     sides: ['gb', 'de'],
   },

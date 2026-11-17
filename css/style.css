@@ -289,7 +289,7 @@ h1, h2, h3, p { margin: 0; }
 .emblem svg { width: 100%; height: 100%; display: block; }
 .wordmark {
   margin-top: 10px;
-  font-size: clamp(58px, 11vh, 92px);
+  font-size: clamp(36px, min(11vh, 17.5vw), 92px); /* by height and width: fits a phone held upright */
   font-weight: 700;
   letter-spacing: 0.2em;
   margin-right: -0.2em;
@@ -1154,7 +1154,7 @@ table.rec th:first-child, table.rec td:first-child { text-align: left; font: 700
 [data-skin="history"] .emblem { color: var(--accent); filter: none; width: clamp(70px, 12vh, 104px); }
 [data-skin="history"] .wordmark {
   font-weight: 700;
-  font-size: clamp(42px, min(8vh, 9.4vw), 68px);
+  font-size: clamp(30px, min(8vh, 11vw), 68px);
   letter-spacing: 0.1em;
   margin-right: -0.1em;
   text-shadow: none;
@@ -1438,4 +1438,95 @@ table.rec th:first-child, table.rec td:first-child { text-align: left; font: 700
 @media (max-height: 760px) {
   .era-card .bl { -webkit-line-clamp: 2; }
   .level span { display: none; }
+}
+
+/* Phones: nothing on the title may be wider than the screen */
+.title-card { max-width: 100%; }
+.wordmark { max-width: 100%; white-space: nowrap; }
+@media (max-width: 420px) {
+  .tagline { letter-spacing: 0.14em; font-size: 12px; }
+  [data-skin="history"] .tagline { letter-spacing: 0.12em; }
+}
+
+/* ── Phones and other narrow screens ── */
+.overlay > .card { min-width: 0; max-width: 100%; }
+.era-card, .side-card { min-width: 0; }
+.era-card b, .side-card b { overflow-wrap: anywhere; }
+.turn { min-width: 0; flex: 0 1 auto; }
+.turn > span:last-child { min-width: 0; }
+.turn strong, .turn #turn-sub { overflow: hidden; text-overflow: ellipsis; }
+.readout { flex: none; }
+@media (max-width: 600px) {
+  .sides { grid-template-columns: 1fr; }
+  .hud { gap: 8px; }
+  .turn { padding: 0 12px 0 10px; gap: 9px; flex: 1 1 auto; }
+  .turn strong { font-size: 17px; letter-spacing: 0.06em; }
+  .readout { gap: 10px; }
+  .readout span:not(.clock) { display: none; } /* shots and accuracy are on the result screen */
+  #battle-net span { display: none; }
+}
+@media (max-width: 380px) {
+  .turn #turn-sub { display: none; }
+  .menu-row .btn { font-size: 14px; }
+}
+.key { flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+@container (max-width: 260px) {
+  .key { gap: 3px 9px; font-size: 11px; }
+  .key .cell { width: 15px; height: 15px; }
+  .key span { gap: 4px; }
+}
+
+/* Historical title plaque on short screens (phones held sideways, small phones) */
+@media (max-height: 600px) {
+  [data-skin="history"] .emblem { display: none; }
+  [data-skin="history"] .title-card { padding: 10px 16px 12px; }
+  [data-skin="history"] .wordmark { font-size: clamp(28px, 9vh, 44px); padding-top: 0.04em; }
+  [data-skin="history"] .menu { margin-top: 10px; gap: 6px; }
+  [data-skin="history"] .menu .btn.stack { min-height: 44px; padding: 7px 14px 5px; font-size: 17px; }
+  [data-skin="history"] .menu .btn.stack small { display: none; }
+  [data-skin="history"] .menu-pair, [data-skin="history"] .menu-row { gap: 6px; }
+  [data-skin="history"] .menu-row .btn { min-height: 44px; padding: 4px 8px; flex-direction: row; gap: 6px; }
+  .skin-btn { top: max(8px, env(safe-area-inset-top)); }
+}
+@media (max-width: 360px) {
+  [data-skin="history"] .title-card { padding-inline: 12px; }
+  .menu-pair .btn.stack { font-size: 16px; padding-inline: 6px; }
+  .menu-row .btn { font-size: 12.5px; letter-spacing: 0.02em; padding-inline: 4px; }
+}
+/* Deployment on very small phones */
+@media (max-height: 620px) and (max-width: 480px) {
+  .place-actions { gap: 6px; }
+  .place-actions .btn { min-height: 38px; padding: 4px 8px; font-size: 14px; }
+  .place-actions .primary { min-height: 42px; font-size: 16px; }
+  .tray-panel { padding: 6px 10px 8px; }
+  .tray-item { min-height: 22px; }
+  .tray-panel h2 { margin-bottom: 2px; }
+}
+
+/* The title never outgrows its card or plaque: sized by the card's own width
+   (cqi) as well as the screen, using each typeface's measured width. */
+.title-card { container-type: inline-size; }
+.wordmark { font-size: min(clamp(36px, min(11vh, 17.5vw), 92px), 20.2cqi); }
+[data-skin="history"] .wordmark { font-size: min(clamp(30px, min(8vh, 11vw), 68px), 15cqi); }
+[data-skin="history"][data-era="1805"] .wordmark { font-size: min(clamp(30px, min(8vh, 11vw), 68px), 14.2cqi); }
+[data-skin="history"][data-era="1982"] .wordmark { font-size: min(clamp(30px, min(8vh, 11vw), 68px), 20cqi); }
+@media (max-height: 600px) {
+  [data-skin="history"] .wordmark { font-size: min(clamp(28px, 9vh, 44px), 15cqi); }
+  [data-skin="history"][data-era="1805"] .wordmark { font-size: min(clamp(28px, 9vh, 44px), 14.2cqi); }
+  [data-skin="history"][data-era="1982"] .wordmark { font-size: min(clamp(28px, 9vh, 44px), 20cqi); }
+}
+.menu .btn, .menu-pair > *, .menu-row > * { min-width: 0; }
+@media (max-width: 360px) {
+  [data-skin="history"] .menu-pair { grid-template-columns: 1fr; }
+  [data-skin="history"] .menu-row .btn { letter-spacing: 0; font-size: 12px; }
+  [data-skin="history"] .menu .btn.stack { letter-spacing: 0.06em; }
+}
+@media (max-width: 360px) {
+  [data-skin="history"] .menu-row .btn { flex-direction: column; gap: 2px; padding: 4px 2px; }
+}
+
+@media (max-width: 440px) {
+  .tagline { text-wrap: balance; }
+  [data-skin="history"] .menu-pair .btn.stack { font-size: 17px; letter-spacing: 0.05em; padding-inline: 6px; }
+  [data-skin="history"] .menu-row .btn { letter-spacing: 0.02em; }
 }
