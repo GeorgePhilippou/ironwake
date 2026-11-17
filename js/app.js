@@ -73,8 +73,8 @@ const mqLight = window.matchMedia('(prefers-color-scheme: light)');
 const reduced = () => (settings.reducedMotion === null ? mqMotion.matches : settings.reducedMotion);
 const isLight = () => (settings.theme === 'auto' ? mqLight.matches : settings.theme === 'light');
 const timing = () => (reduced()
-  ? { aim: 120, hold: 1000, sunkHold: 1900, think: 380, result: 500 }
-  : { aim: 280, hold: 1150, sunkHold: 2300, think: 720, result: 900 });
+  ? { aim: 120, hold: 800, sunkHold: 1600, think: 380, result: 500 }
+  : { aim: 280, hold: 950, sunkHold: 1900, think: 720, result: 900 });
 
 let skinDrawn = false;
 function applySettings() {
@@ -202,7 +202,7 @@ function callout(text, kind, anchor, dur = 1100, small = false) {
   el.style.left = `${r.left + r.width / 2}px`;
   el.style.top = `${r.top + r.height / 2}px`;
   // Long enough to read: at least 1.2 s plus a little per letter, so longer messages stay longer.
-  const readable = Math.min(3200, Math.max(dur, 1200 + text.length * 50));
+  const readable = Math.min(2400, Math.max(dur, 900 + text.length * 30));
   el.style.setProperty('--dur', `${readable / SPEED}ms`);
   void el.offsetWidth; // restart the animation
   el.classList.add('show');
@@ -696,7 +696,7 @@ function enterBattle(fresh = false) {
   beginTurn();
   if (fresh) {
     sfx.play('stations');
-    callout(say('battleStations'), 'info', targetBoard.grid, 1900);
+    callout(say('battleStations'), 'info', targetBoard.grid, 1500);
   }
 }
 
@@ -781,13 +781,13 @@ async function playShot(i, result, ship, incoming, withAim) {
     fx.splash(to.x, to.y, scale);
     sfx.play('splash');
     haptic('miss');
-    callout(incoming ? say('theyMissed') : say('miss'), 'miss', ui.grid, 1700, incoming);
+    callout(incoming ? say('theyMissed') : say('miss'), 'miss', ui.grid, 1250, incoming);
   } else if (result === 'hit') {
     fx.explosion(to.x, to.y, scale);
     sfx.play('hit');
     haptic('hit');
     shake(ui.host);
-    callout(incoming ? `${name} hit` : say('hit'), 'hit', ui.grid, 1700, incoming);
+    callout(incoming ? `${name} hit` : say('hit'), 'hit', ui.grid, 1250, incoming);
   } else {
     sfx.play('sunk');
     haptic('sunk');
@@ -800,7 +800,7 @@ async function playShot(i, result, ship, incoming, withAim) {
         fx.explosion(p.x, p.y, scale * 1.1);
       }, ((n + 1) * 110) / SPEED);
     });
-    callout(incoming ? `${name} lost` : `${name} sunk`, 'sunk', ui.grid, 2600, incoming);
+    callout(incoming ? `${name} lost` : `${name} sunk`, 'sunk', ui.grid, 2000, incoming);
   }
   await wait(result === 'sunk' ? t.sunkHold : t.hold);
   return myGen === gen;
@@ -932,7 +932,7 @@ function onNetEvent(e) {
         if (screen !== 'battle') return;
         beginTurn();
         sfx.play('stations');
-        callout(say('battleStations'), 'info', targetBoard.grid, 1900);
+        callout(say('battleStations'), 'info', targetBoard.grid, 1500);
       });
       break;
     case 'incoming':
@@ -1100,15 +1100,15 @@ function openHostSetup() {
     ${battlePicker('You command — the other iPad gets the other side')}
     ${ruleSwitch('hit-and-go-again', 'Hit and go again', 'Hit or sink a ship to fire again. A miss ends your turn.')}
     ${ruleSwitch('keep-ships-apart', 'Keep ships apart', 'Leave a one-square gap between ships, including at corners.')}
-    <p style="margin-top:12px">The battle and rules you choose apply to both iPads. You fire first.</p>
-    <div class="card-actions"><button class="btn primary" id="host-go">Create room</button></div>`);
+    <p style="margin-top:12px">The battle and rules you choose apply to both iPads. You fire first.</p>`,
+    '<button class="btn primary" id="host-go">Create room</button>', true);
   bindBattlePicker(body);
   const enabled = (b) => b.getAttribute('aria-checked') === 'true';
   body.querySelectorAll('.switch').forEach((b) => b.addEventListener('click', () => {
     b.setAttribute('aria-checked', !enabled(b));
     sfx.play('toggle');
   }));
-  body.querySelector('#host-go').addEventListener('click', () => {
+  $('host-go').addEventListener('click', () => {
     sfx.play('click');
     startHost({
       hitAndGoAgain: enabled(body.querySelector('#hit-and-go-again')),
@@ -1330,10 +1330,14 @@ $('turn').addEventListener('click', () => {
 });
 
 // ───────── Sheets ─────────
-function openSheet(title, html) {
+/** `foot` is pinned below the scrolling body, so its button can never end up off screen. */
+function openSheet(title, html, foot = '', wide = false) {
   if (sheetOpen && onSheetClose) { const hook = onSheetClose; onSheetClose = null; hook(); }
   $('sheet-title').textContent = title;
   $('sheet-body').innerHTML = html;
+  $('sheet-foot').innerHTML = foot;
+  $('sheet-foot').hidden = !foot;
+  $('sheet').firstElementChild.classList.toggle('wide', wide);
   $('sheet-body').scrollTop = 0;
   $('sheet').hidden = false;
   sheetOpen = true;
@@ -1419,10 +1423,10 @@ function openSetup(mode) {
     <button type="button" id="${id}" class="switch" role="switch" aria-checked="false" aria-label="${title}"></button></div>`;
   const body = openSheet(solo ? 'Solo mission' : 'Pass & play', `
     ${battlePicker(solo ? 'You command' : 'Player 1 commands')}
-    ${solo ? levelCards(settings.difficulty) : ''}
+    ${solo ? `<div class="row col"><div class="lbl"><b>Computer</b></div>${levelCards(settings.difficulty)}</div>` : ''}
     ${ruleSwitch('hit-and-go-again', 'Hit and go again', 'Hit or sink a ship to fire again. A miss ends your turn.')}
-    ${ruleSwitch('keep-ships-apart', 'Keep ships apart', 'Leave a one-square gap between ships, including at corners.')}
-    <div class="card-actions"><button class="btn primary" id="setup-go">Deploy fleet</button></div>`);
+    ${ruleSwitch('keep-ships-apart', 'Keep ships apart', 'Leave a one-square gap between ships, including at corners.')}`,
+    '<button class="btn primary" id="setup-go">Deploy fleet</button>', true);
   bindBattlePicker(body);
   body.querySelectorAll('.level').forEach((b) => b.addEventListener('click', () => {
     settings.difficulty = b.dataset.level;
@@ -1435,7 +1439,7 @@ function openSetup(mode) {
     button.setAttribute('aria-checked', !enabled(button));
     sfx.play('toggle');
   }));
-  body.querySelector('#setup-go').addEventListener('click', () => {
+  $('setup-go').addEventListener('click', () => {
     sfx.play('click');
     startGame({
       mode,
