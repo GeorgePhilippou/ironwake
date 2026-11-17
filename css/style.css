@@ -111,6 +111,12 @@ html, body {
   touch-action: manipulation;
 }
 body { position: fixed; inset: 0; }
+/* Home-screen app on iPad: WebKit can report a window that stops short of the
+   bottom of the screen by about the status bar's height, leaving a strip of
+   bare background. app.js measures the real screen height when that happens;
+   the page and everything pinned to it (overlays, effects) then fill the whole
+   screen. The transform makes the body the frame for position:fixed overlays. */
+html.fill-screen body { bottom: auto; height: var(--screen-h); transform: translateZ(0); }
 [hidden] { display: none !important; }
 button { font: inherit; color: inherit; touch-action: manipulation; cursor: pointer; }
 button:disabled { cursor: default; }

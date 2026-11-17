@@ -22,8 +22,11 @@ export class Fx {
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.w = window.innerWidth;
-    this.h = window.innerHeight;
+    // Follow the canvas's real size: on iPad home-screen apps the page can be
+    // taller than innerHeight (see fill-screen in app.js).
+    const r = this.canvas.getBoundingClientRect();
+    this.w = Math.round(r.width) || window.innerWidth;
+    this.h = Math.round(r.height) || window.innerHeight;
     this.canvas.width = Math.round(this.w * dpr);
     this.canvas.height = Math.round(this.h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

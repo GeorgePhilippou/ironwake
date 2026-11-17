@@ -1636,6 +1636,26 @@ if ('serviceWorker' in navigator && (!local || params.has('sw'))) {
   });
 }
 
+// See html.fill-screen in style.css. Only for a full-width home-screen window
+// that is short by a status-bar-sized strip — never in Split View or Stage
+// Manager, where a smaller window is real.
+function fillScreen() {
+  const root = document.documentElement;
+  const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const land = innerWidth > innerHeight;
+  const { width: sw, height: sh } = window.screen; // not `screen`: that name is the app's current view
+  const screenW = land ? Math.max(sw, sh) : Math.min(sw, sh);
+  const screenH = land ? Math.min(sw, sh) : Math.max(sw, sh);
+  const gap = screenH - innerHeight;
+  const fix = standalone && Math.abs(innerWidth - screenW) <= 2 && gap > 2 && gap <= 80;
+  root.classList.toggle('fill-screen', fix);
+  if (fix) root.style.setProperty('--screen-h', `${screenH}px`); else root.style.removeProperty('--screen-h');
+  fx.resize();
+}
+fillScreen();
+window.addEventListener('resize', fillScreen);
+window.addEventListener('orientationchange', () => setTimeout(fillScreen, 250));
+
 applySettings();
 showTitle();
 
@@ -1644,4 +1664,5 @@ window.__ironwake = {
   get game() { return game; },
   get state() { return { screen, viewer, busy, covered, sheetOpen, gen, netStatus, joining: !!joining }; },
   get stats() { return stats; },
+  fillScreen,
 };
