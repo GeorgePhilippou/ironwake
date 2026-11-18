@@ -1,4 +1,4 @@
-// Ironwake — transient battle effects on one full-screen canvas: targeting pulses,
+// Ironwake — transient effects on board-local canvases and a full-screen canvas: targeting pulses,
 // splashes, explosions, fireworks. The loop only runs while something is alive,
 // and game logic never waits on it (timing lives in app.js), so a throttled or
 // hidden tab cannot stall a match.
@@ -7,8 +7,9 @@ const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 
 export class Fx {
-  constructor(canvas) {
+  constructor(canvas, boardSize = 0) {
     this.canvas = canvas;
+    this.boardSize = boardSize;
     this.ctx = canvas.getContext('2d');
     this.parts = [];
     this.rings = [];
@@ -17,19 +18,20 @@ export class Fx {
     this.light = false;
     this.last = 0;
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    new ResizeObserver(() => this.resize()).observe(canvas);
   }
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    // Follow the canvas's real size: on iPad home-screen apps the page can be
-    // taller than innerHeight (see fill-screen in app.js).
-    const r = this.canvas.getBoundingClientRect();
-    this.w = Math.round(r.width) || window.innerWidth;
-    this.h = Math.round(r.height) || window.innerHeight;
-    this.canvas.width = Math.round(this.w * dpr);
-    this.canvas.height = Math.round(this.h * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const { clientWidth: width, clientHeight: height } = this.canvas;
+    const pixelsWide = Math.round(width * dpr);
+    const pixelsHigh = Math.round(height * dpr);
+    if (this.canvas.width !== pixelsWide) this.canvas.width = pixelsWide;
+    if (this.canvas.height !== pixelsHigh) this.canvas.height = pixelsHigh;
+    this.w = this.boardSize || width;
+    this.h = this.boardSize || height;
+    // Board effects keep their logical coordinates as the canvas moves or resizes.
+    this.ctx.setTransform(pixelsWide / (this.w || 1), 0, 0, pixelsHigh / (this.h || 1), 0, 0);
   }
 
   clear() {

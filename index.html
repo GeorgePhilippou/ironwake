@@ -53,12 +53,14 @@
 <main id="app">
   <!-- Title -->
   <section id="title" class="screen title">
-    <div class="title-flag" id="title-flag" aria-hidden="true"></div>
-    <button class="icon-btn skin-btn" id="btn-skin" type="button"></button>
-    <div class="scope" aria-hidden="true">
-      <i class="ring r1"></i><i class="ring r2"></i><i class="ring r3"></i><i class="axis"></i>
-      <i class="sweep"></i><i class="blip b1"></i><i class="blip b2"></i><i class="blip b3"></i>
+    <div class="title-backdrop" aria-hidden="true">
+      <div class="title-flag" id="title-flag"></div>
+      <div class="scope">
+        <i class="ring r1"></i><i class="ring r2"></i><i class="ring r3"></i><i class="axis"></i>
+        <i class="sweep"></i><i class="blip b1"></i><i class="blip b2"></i><i class="blip b3"></i>
+      </div>
     </div>
+    <button class="icon-btn skin-btn" id="btn-skin" type="button"></button>
     <div class="title-card">
       <div class="emblem" data-emblem></div>
       <h1 class="wordmark">Ironwake</h1>
@@ -199,7 +201,6 @@
   </div>
 </div>
 
-<div class="callout" id="callout" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <label class="hx" for="hx-switch" id="hx-label" aria-hidden="true"><input type="checkbox" switch id="hx-switch" tabindex="-1"></label>
 

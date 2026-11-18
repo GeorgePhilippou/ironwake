@@ -6,7 +6,7 @@
 // fresh copy into its own cache, takes over, and the page reloads itself.
 // A copy is therefore always all-old or all-new, never a mixture.
 
-const VERSION = '1.4.5-3e3d8a4b';
+const VERSION = '1.4.6-0bfde1e6';
 const ASSETS = [
   './',
   'index.html',

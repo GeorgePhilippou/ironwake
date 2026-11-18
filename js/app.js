@@ -66,7 +66,7 @@ if (game && game.phase === 'over') { game = null; clearGame(); }
 if (game && game.mode === 'duo') game.cover = true; // never reopen straight on to someone's fleet
 
 const sfx = new Sfx();
-const fx = new Fx($('fx'));
+const screenFx = new Fx($('fx'));
 
 const mqMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const mqLight = window.matchMedia('(prefers-color-scheme: light)');
@@ -82,8 +82,10 @@ function applySettings() {
   if (settings.theme === 'auto') delete root.dataset.theme; else root.dataset.theme = settings.theme;
   root.dataset.motion = reduced() ? 'reduced' : 'full';
   sfx.enabled = settings.sound;
-  fx.reduced = reduced();
-  fx.light = isLight();
+  for (const fx of [screenFx, targetBoard.fx, ownBoard.fx]) {
+    fx.reduced = reduced();
+    fx.light = isLight();
+  }
   const changed = !skinDrawn || themeKey !== `${settings.skin}.${settings.era}.${settings.side}`;
   skinDrawn = true;
   themeKey = `${settings.skin}.${settings.era}.${settings.side}`;
@@ -160,8 +162,11 @@ function bumpGen() {
   busy = false;
   underFire = false;
   chain = Promise.resolve();
-  fx.clear();
-  $('callout').className = 'callout';
+  screenFx.clear();
+  for (const board of [targetBoard, ownBoard]) {
+    board.fx.clear();
+    board.callout.className = 'callout';
+  }
 }
 
 // ───────── Feedback: haptics, toast, callout ─────────
@@ -194,13 +199,10 @@ function toast(msg, { warn = false, action = null, ms = 2600 } = {}) {
 }
 $('toast').addEventListener('click', () => { if (toastAction) toastAction(); });
 
-function callout(text, kind, anchor, dur = 1100, small = false) {
-  const el = $('callout');
-  const r = anchor.getBoundingClientRect();
+function callout(text, kind, board, dur = 1100, small = false) {
+  const el = board.callout;
   el.className = `callout ${kind}${small || text.length > 18 ? ' small' : ''}`;
   el.textContent = text;
-  el.style.left = `${r.left + r.width / 2}px`;
-  el.style.top = `${r.top + r.height / 2}px`;
   // Long enough to read: at least 1.2 s plus a little per letter, so longer messages stay longer.
   const readable = Math.min(2400, Math.max(dur, 900 + text.length * 30));
   el.style.setProperty('--dur', `${readable / SPEED}ms`);
@@ -208,11 +210,11 @@ function callout(text, kind, anchor, dur = 1100, small = false) {
   el.classList.add('show');
 }
 
-function shake(el, big = false) {
+function flashImpact(el, big = false) {
   if (reduced()) return;
-  el.classList.remove('shake', 'big');
+  el.classList.remove('impact', 'big');
   void el.offsetWidth;
-  el.classList.add('shake');
+  el.classList.add('impact');
   if (big) el.classList.add('big');
 }
 
@@ -227,12 +229,19 @@ function shipHTML(s, cls = '', art = myArt()) {
   return `<div class="ship ${cls}" data-id="${s.id}" style="left:${s.c * 10}%;top:${s.r * 10}%;width:${(s.horiz ? s.len : 1) * 10}%;height:${(s.horiz ? 1 : s.len) * 10}%">${shipSVG(s.id, s.horiz, art)}</div>`;
 }
 
-function makeBoard(host, { buttons = false, onCell = null } = {}) {
+const FX_BOARD_SIZE = 580;
+const FX_CELL_SIZE = FX_BOARD_SIZE / 10;
+
+function makeBoard(host, { buttons = false, onCell = null, effects = false } = {}) {
   const cols = Array.from({ length: 10 }, (_, i) => `<span>${i + 1}</span>`).join('');
   const rows = [...'ABCDEFGHIJ'].map((l) => `<span>${l}</span>`).join('');
   host.innerHTML = `<div class="labels cols" aria-hidden="true">${cols}</div><div class="labels rows" aria-hidden="true">${rows}</div>
     <div class="grid"><i class="sweep"></i><div class="ships"></div><div class="preview" hidden></div><div class="cells"></div></div>`;
   const grid = host.querySelector('.grid');
+  if (effects) {
+    grid.insertAdjacentHTML('beforeend',
+      '<canvas class="board-fx" aria-hidden="true"></canvas><div class="callout" aria-hidden="true"></div>');
+  }
   const cellsEl = host.querySelector('.cells');
   const shipsEl = host.querySelector('.ships');
   const cells = [];
@@ -281,6 +290,8 @@ function makeBoard(host, { buttons = false, onCell = null } = {}) {
   let shipKey = null;
   return {
     host, grid, cells, shipsEl, preview: host.querySelector('.preview'),
+    fx: effects ? new Fx(grid.querySelector('.board-fx'), FX_BOARD_SIZE) : null,
+    callout: grid.querySelector('.callout'),
     /** ships: 'all' shows every ship; 'sunk' shows wrecks only; reveal adds the survivors as outlines. */
     paint(board, { ships = 'all', last = -1, fresh = -1, freshShip = null, reveal = false, art = myArt() } = {}) {
       const sunkCells = new Set();
@@ -316,22 +327,20 @@ function makeBoard(host, { buttons = false, onCell = null } = {}) {
       }
     },
     resetShips() { shipKey = null; },
-    cellCenter(i) {
-      const r = cells[i].getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    },
     cellSize() { return grid.getBoundingClientRect().width / 10; },
   };
 }
 
 const placeBoard = makeBoard($('place-board'));
-const targetBoard = makeBoard($('target-board'), { buttons: true, onCell: playerFire });
-const ownBoard = makeBoard($('own-board'));
+const targetBoard = makeBoard($('target-board'), { buttons: true, onCell: playerFire, effects: true });
+const ownBoard = makeBoard($('own-board'), { effects: true });
 
 // ───────── Screens ─────────
 function showScreen(name) {
   screen = name;
   for (const id of ['title', 'place', 'battle']) $(id).hidden = id !== name;
+  const scroller = $(name).querySelector('.stage') || $(name);
+  scroller.scrollTop = 0;
 }
 
 function showTitle() {
@@ -559,6 +568,9 @@ $('tray').addEventListener('click', (e) => {
 window.addEventListener('pointermove', dragMove);
 window.addEventListener('pointerup', (e) => dragEnd(e));
 window.addEventListener('pointercancel', (e) => dragEnd(e, true));
+new ResizeObserver(() => {
+  if (drag) dragEnd(drag, true);
+}).observe(placeBoard.grid);
 
 $('btn-auto').addEventListener('click', () => {
   if (drag) return;
@@ -696,7 +708,7 @@ function enterBattle(fresh = false) {
   beginTurn();
   if (fresh) {
     sfx.play('stations');
-    callout(say('battleStations'), 'info', targetBoard.grid, 1500);
+    callout(say('battleStations'), 'info', targetBoard, 1500);
   }
 }
 
@@ -759,48 +771,48 @@ async function resolveShot(i) {
   beginTurn();
 }
 
+function shotPoint(i) {
+  return [(i % 10 + 0.5) * FX_CELL_SIZE, (Math.floor(i / 10) + 0.5) * FX_CELL_SIZE];
+}
+
 /** Animate one shot landing. Resolves false if the match was abandoned meanwhile. */
 async function playShot(i, result, ship, incoming, withAim) {
   const myGen = gen;
   const t = timing();
   const ui = incoming ? ownBoard : targetBoard;
+  const point = shotPoint(i);
   if (withAim) {
-    const aim = ui.cellCenter(i);
     sfx.play('fire');
     if (!incoming) haptic('tap');
-    fx.aim(aim.x, aim.y, ui.cellSize(), t.aim / SPEED);
+    ui.fx.aim(...point, FX_CELL_SIZE, t.aim / SPEED);
     await wait(t.aim);
     if (myGen !== gen) return false;
   }
   const name = ship ? (incoming ? ownShip(ship.id) : enemyShip(ship.id)) : 'Ship';
   const freshOn = incoming ? 'own' : 'target';
   paintBattle({ fresh: i, freshShip: result === 'sunk' && ship ? ship.id : null, freshOn });
-  const to = ui.cellCenter(i);
-  const scale = clamp(ui.cellSize() / 58, 0.45, 1.25);
   if (result === 'miss') {
-    fx.splash(to.x, to.y, scale);
+    ui.fx.splash(...point);
     sfx.play('splash');
     haptic('miss');
-    callout(incoming ? say('theyMissed') : say('miss'), 'miss', ui.grid, 1250, incoming);
+    callout(incoming ? say('theyMissed') : say('miss'), 'miss', ui, 1250, incoming);
   } else if (result === 'hit') {
-    fx.explosion(to.x, to.y, scale);
+    ui.fx.explosion(...point);
     sfx.play('hit');
     haptic('hit');
-    shake(ui.host);
-    callout(incoming ? `${name} hit` : say('hit'), 'hit', ui.grid, 1250, incoming);
+    flashImpact(ui.host);
+    callout(incoming ? `${name} hit` : say('hit'), 'hit', ui, 1250, incoming);
   } else {
     sfx.play('sunk');
     haptic('sunk');
-    shake(ui.host, true);
-    fx.explosion(to.x, to.y, scale * 1.1);
+    flashImpact(ui.host, true);
+    ui.fx.explosion(...point, 1.1);
     (ship ? shipCells(ship) : []).filter((c) => c !== i).forEach((c, n) => {
       setTimeout(() => {
-        if (myGen !== gen) return;
-        const p = ui.cellCenter(c);
-        fx.explosion(p.x, p.y, scale * 1.1);
+        if (myGen === gen) ui.fx.explosion(...shotPoint(c), 1.1);
       }, ((n + 1) * 110) / SPEED);
     });
-    callout(incoming ? `${name} lost` : `${name} sunk`, 'sunk', ui.grid, 2000, incoming);
+    callout(incoming ? `${name} lost` : `${name} sunk`, 'sunk', ui, 2000, incoming);
   }
   await wait(result === 'sunk' ? t.sunkHold : t.hold);
   return myGen === gen;
@@ -932,7 +944,7 @@ function onNetEvent(e) {
         if (screen !== 'battle') return;
         beginTurn();
         sfx.play('stations');
-        callout(say('battleStations'), 'info', targetBoard.grid, 1500);
+        callout(say('battleStations'), 'info', targetBoard, 1500);
       });
       break;
     case 'incoming':
@@ -968,10 +980,9 @@ function fireAtOpponent(i) {
   if (!r.ok) return;
   persist();
   r.send.forEach(send);
-  const aim = targetBoard.cellCenter(i);
   sfx.play('fire');
   haptic('tap');
-  fx.aim(aim.x, aim.y, targetBoard.cellSize(), timing().aim / SPEED);
+  targetBoard.fx.aim(...shotPoint(i), FX_CELL_SIZE, timing().aim / SPEED);
   refreshOnlineTurn();
 }
 
@@ -1169,7 +1180,7 @@ function openJoin(prefill = '') {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
   input.addEventListener('input', () => { body.querySelector('#join-error').textContent = ''; });
   body.querySelector('#join-go').addEventListener('click', go);
-  setTimeout(() => input.focus(), 60);
+  setTimeout(() => { if (input.isConnected && sheetOpen) input.focus(); }, 60);
 }
 
 function startJoin(code) {
@@ -1313,7 +1324,7 @@ async function showResult() {
   }
   $('result').hidden = false;
   if (solo && !won) { sfx.play('lose'); }
-  else { sfx.play('win'); haptic('win'); fx.fireworks(); }
+  else { sfx.play('win'); haptic('win'); screenFx.fireworks(); }
 }
 
 $('btn-rematch').addEventListener('click', () => {
@@ -1619,6 +1630,24 @@ function onHide() { if (game) persist(); }
 document.addEventListener('visibilitychange', () => { if (document.hidden) onHide(); else lastTick = performance.now(); });
 window.addEventListener('pagehide', onHide);
 
+const viewport = window.visualViewport;
+if (viewport) {
+  const sheet = $('sheet');
+  const fitKeyboard = () => {
+    const typingCode = document.activeElement?.id === 'join-code';
+    if (typingCode && Math.abs(viewport.scale - 1) < 0.01 && viewport.height < sheet.parentElement.clientHeight - 1) {
+      sheet.style.setProperty('--keyboard-top', `${Math.max(0, viewport.offsetTop)}px`);
+      sheet.style.setProperty('--keyboard-height', `${viewport.height}px`);
+    } else {
+      sheet.style.removeProperty('--keyboard-top');
+      sheet.style.removeProperty('--keyboard-height');
+    }
+  };
+  viewport.addEventListener('resize', fitKeyboard);
+  viewport.addEventListener('scroll', fitKeyboard);
+  sheet.addEventListener('focusout', () => requestAnimationFrame(fitKeyboard));
+}
+
 // Offline support + updates. Skipped on localhost so development never serves stale files
 // (add ?sw=1 to test it locally).
 const local = ['localhost', '127.0.0.1'].includes(location.hostname);
@@ -1636,26 +1665,6 @@ if ('serviceWorker' in navigator && (!local || params.has('sw'))) {
   });
 }
 
-// See html.fill-screen in style.css. Only for a full-width home-screen window
-// that is short by a status-bar-sized strip — never in Split View or Stage
-// Manager, where a smaller window is real.
-function fillScreen() {
-  const root = document.documentElement;
-  const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-  const land = innerWidth > innerHeight;
-  const { width: sw, height: sh } = window.screen; // not `screen`: that name is the app's current view
-  const screenW = land ? Math.max(sw, sh) : Math.min(sw, sh);
-  const screenH = land ? Math.min(sw, sh) : Math.max(sw, sh);
-  const gap = screenH - innerHeight;
-  const fix = standalone && Math.abs(innerWidth - screenW) <= 2 && gap > 2 && gap <= 80;
-  root.classList.toggle('fill-screen', fix);
-  if (fix) root.style.setProperty('--screen-h', `${screenH}px`); else root.style.removeProperty('--screen-h');
-  fx.resize();
-}
-fillScreen();
-window.addEventListener('resize', fillScreen);
-window.addEventListener('orientationchange', () => setTimeout(fillScreen, 250));
-
 applySettings();
 showTitle();
 
@@ -1664,5 +1673,4 @@ window.__ironwake = {
   get game() { return game; },
   get state() { return { screen, viewer, busy, covered, sheetOpen, gen, netStatus, joining: !!joining }; },
   get stats() { return stats; },
-  fillScreen,
 };
